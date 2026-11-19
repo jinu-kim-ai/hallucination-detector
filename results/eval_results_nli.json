@@ -1,0 +1,794 @@
+{
+  "metrics": {
+    "binary_hallucination_detection": {
+      "n": 50,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "accuracy": 1.0
+    },
+    "by_domain": {
+      "finance": {
+        "n": 10,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "accuracy": 1.0
+      },
+      "history": {
+        "n": 10,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "accuracy": 1.0
+      },
+      "medicine": {
+        "n": 10,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "accuracy": 1.0
+      },
+      "science": {
+        "n": 10,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "accuracy": 1.0
+      },
+      "technology": {
+        "n": 10,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "accuracy": 1.0
+      }
+    },
+    "four_way_accuracy": 0.98,
+    "per_label": {
+      "SUPPORTED": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "support": 20
+      },
+      "CONTRADICTED": {
+        "precision": 1.0,
+        "recall": 0.933,
+        "support": 15
+      },
+      "FABRICATED": {
+        "precision": 0.909,
+        "recall": 1.0,
+        "support": 10
+      },
+      "UNSUPPORTED": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "support": 5
+      }
+    },
+    "confusion": {
+      "SUPPORTED": {
+        "SUPPORTED": 20,
+        "CONTRADICTED": 0,
+        "FABRICATED": 0,
+        "UNSUPPORTED": 0
+      },
+      "CONTRADICTED": {
+        "SUPPORTED": 0,
+        "CONTRADICTED": 14,
+        "FABRICATED": 1,
+        "UNSUPPORTED": 0
+      },
+      "FABRICATED": {
+        "SUPPORTED": 0,
+        "CONTRADICTED": 0,
+        "FABRICATED": 10,
+        "UNSUPPORTED": 0
+      },
+      "UNSUPPORTED": {
+        "SUPPORTED": 0,
+        "CONTRADICTED": 0,
+        "FABRICATED": 0,
+        "UNSUPPORTED": 5
+      }
+    }
+  },
+  "predictions": [
+    {
+      "id": "sci-01",
+      "domain": "science",
+      "source_id": "curie",
+      "claim": "Marie Curie was born in Warsaw in 1867.",
+      "label": "SUPPORTED",
+      "pred": "SUPPORTED",
+      "confidence": 1.0,
+      "similarity": 1.0,
+      "reasons": [
+        "best evidence similarity 1.00"
+      ]
+    },
+    {
+      "id": "sci-02",
+      "domain": "science",
+      "source_id": "curie",
+      "claim": "Curie and her husband discovered polonium and radium in 1898.",
+      "label": "SUPPORTED",
+      "pred": "SUPPORTED",
+      "confidence": 0.963,
+      "similarity": 0.9359288215637207,
+      "reasons": [
+        "best evidence similarity 0.94"
+      ]
+    },
+    {
+      "id": "sci-03",
+      "domain": "science",
+      "source_id": "curie",
+      "claim": "She was the first person to win Nobel Prizes in two different sciences.",
+      "label": "SUPPORTED",
+      "pred": "SUPPORTED",
+      "confidence": 0.987,
+      "similarity": 0.8853020071983337,
+      "reasons": [
+        "best evidence similarity 0.89"
+      ]
+    },
+    {
+      "id": "sci-04",
+      "domain": "science",
+      "source_id": "curie",
+      "claim": "Curie won the Nobel Prize in Chemistry in 1911.",
+      "label": "SUPPORTED",
+      "pred": "SUPPORTED",
+      "confidence": 0.759,
+      "similarity": 0.7348883748054504,
+      "reasons": [
+        "best evidence similarity 0.73"
+      ]
+    },
+    {
+      "id": "sci-05",
+      "domain": "science",
+      "source_id": "curie",
+      "claim": "Marie Curie moved to Paris in 1895 to study at the University of Paris.",
+      "label": "CONTRADICTED",
+      "pred": "CONTRADICTED",
+      "confidence": 1.0,
+      "similarity": 0.7753745317459106,
+      "reasons": [
+        "best evidence similarity 0.78",
+        "number mismatch: claim says 1895, evidence says 1891",
+        "DATE mismatch: claim says '1895', evidence says '1891'",
+        "NLI contradiction p=0.97"
+      ]
+    },
+    {
+      "id": "sci-06",
+      "domain": "science",
+      "source_id": "curie",
+      "claim": "In 1903 she shared the Nobel Prize in Chemistry with Pierre Curie and Henri Becquerel.",
+      "label": "CONTRADICTED",
+      "pred": "CONTRADICTED",
+      "confidence": 0.979,
+      "similarity": 0.9606543779373169,
+      "reasons": [
+        "best evidence similarity 0.96",
+        "NLI contradiction p=0.99"
+      ]
+    },
+    {
+      "id": "sci-07",
+      "domain": "science",
+      "source_id": "curie",
+      "claim": "Marie Curie taught at Oxford University from 1920 to 1925.",
+      "label": "FABRICATED",
+      "pred": "FABRICATED",
+      "confidence": 1.0,
+      "similarity": 0.5106271505355835,
+      "reasons": [
+        "best evidence similarity 0.51",
+        "not found in source: 1920, 1925, 'Oxford University', '1920 to 1925'"
+      ]
+    },
+    {
+      "id": "sci-08",
+      "domain": "science",
+      "source_id": "curie",
+      "claim": "Her daughter Irene founded a research institute in Lyon in 1945.",
+      "label": "FABRICATED",
+      "pred": "FABRICATED",
+      "confidence": 1.0,
+      "similarity": 0.4830387234687805,
+      "reasons": [
+        "best evidence similarity 0.48",
+        "not found in source: 1945, 'Irene', 'Lyon', '1945'"
+      ]
+    },
+    {
+      "id": "sci-09",
+      "domain": "science",
+      "source_id": "curie",
+      "claim": "Marie Curie was known for her calm and patient teaching style.",
+      "label": "UNSUPPORTED",
+      "pred": "UNSUPPORTED",
+      "confidence": 0.562,
+      "similarity": 0.5695801973342896,
+      "reasons": [
+        "best evidence similarity 0.57",
+        "no source sentence reaches support threshold 0.65"
+      ]
+    },
+    {
+      "id": "sci-10",
+      "domain": "science",
+      "source_id": "curie",
+      "claim": "Marie Curie died in 1938 from aplastic anemia.",
+      "label": "CONTRADICTED",
+      "pred": "FABRICATED",
+      "confidence": 0.874,
+      "similarity": 0.6465212106704712,
+      "reasons": [
+        "best evidence similarity 0.65",
+        "not found in source: 1938, '1938'"
+      ]
+    },
+    {
+      "id": "his-01",
+      "domain": "history",
+      "source_id": "apollo11",
+      "claim": "Apollo 11 launched from Kennedy Space Center on July 16, 1969.",
+      "label": "SUPPORTED",
+      "pred": "SUPPORTED",
+      "confidence": 1.0,
+      "similarity": 1.0,
+      "reasons": [
+        "best evidence similarity 1.00"
+      ]
+    },
+    {
+      "id": "his-02",
+      "domain": "history",
+      "source_id": "apollo11",
+      "claim": "The lunar module Eagle landed in the Sea of Tranquility on July 20, 1969.",
+      "label": "SUPPORTED",
+      "pred": "SUPPORTED",
+      "confidence": 0.995,
+      "similarity": 0.9922090768814087,
+      "reasons": [
+        "best evidence similarity 0.99"
+      ]
+    },
+    {
+      "id": "his-03",
+      "domain": "history",
+      "source_id": "apollo11",
+      "claim": "Michael Collins stayed in lunar orbit aboard the command module Columbia.",
+      "label": "SUPPORTED",
+      "pred": "SUPPORTED",
+      "confidence": 0.927,
+      "similarity": 0.9196346402168274,
+      "reasons": [
+        "best evidence similarity 0.92"
+      ]
+    },
+    {
+      "id": "his-04",
+      "domain": "history",
+      "source_id": "apollo11",
+      "claim": "Aldrin stepped onto the Moon roughly 19 minutes after Armstrong.",
+      "label": "SUPPORTED",
+      "pred": "SUPPORTED",
+      "confidence": 0.995,
+      "similarity": 0.8652645945549011,
+      "reasons": [
+        "best evidence similarity 0.87"
+      ]
+    },
+    {
+      "id": "his-05",
+      "domain": "history",
+      "source_id": "apollo11",
+      "claim": "The astronauts collected about 45 kilograms of lunar samples.",
+      "label": "CONTRADICTED",
+      "pred": "CONTRADICTED",
+      "confidence": 1.0,
+      "similarity": 0.983910322189331,
+      "reasons": [
+        "best evidence similarity 0.98",
+        "number mismatch: claim says 45, evidence says 21.5",
+        "NLI contradiction p=1.00"
+      ]
+    },
+    {
+      "id": "his-06",
+      "domain": "history",
+      "source_id": "apollo11",
+      "claim": "The mission splashed down in the Atlantic Ocean on July 24, 1969.",
+      "label": "CONTRADICTED",
+      "pred": "CONTRADICTED",
+      "confidence": 1.0,
+      "similarity": 0.8125360012054443,
+      "reasons": [
+        "best evidence similarity 0.81",
+        "LOC mismatch: claim says 'the Atlantic Ocean', evidence says 'Earth'",
+        "NLI contradiction p=1.00"
+      ]
+    },
+    {
+      "id": "his-07",
+      "domain": "history",
+      "source_id": "apollo11",
+      "claim": "Buzz Aldrin was the first person to walk on the Moon.",
+      "label": "CONTRADICTED",
+      "pred": "CONTRADICTED",
+      "confidence": 0.926,
+      "similarity": 0.8651408553123474,
+      "reasons": [
+        "best evidence similarity 0.87",
+        "NLI contradiction p=0.99"
+      ]
+    },
+    {
+      "id": "his-08",
+      "domain": "history",
+      "source_id": "apollo11",
+      "claim": "The crew trained for the landing at Edwards Air Force Base in Nevada.",
+      "label": "FABRICATED",
+      "pred": "FABRICATED",
+      "confidence": 0.957,
+      "similarity": 0.408915638923645,
+      "reasons": [
+        "best evidence similarity 0.41",
+        "not found in source: 'Edwards Air Force Base', 'Nevada'"
+      ]
+    },
+    {
+      "id": "his-09",
+      "domain": "history",
+      "source_id": "apollo11",
+      "claim": "The Saturn V rocket for the mission was assembled in Huntsville by 12,000 engineers.",
+      "label": "FABRICATED",
+      "pred": "FABRICATED",
+      "confidence": 1.0,
+      "similarity": 0.36569178104400635,
+      "reasons": [
+        "best evidence similarity 0.37",
+        "not found in source: 12000, 'Saturn', 'Huntsville'"
+      ]
+    },
+    {
+      "id": "his-10",
+      "domain": "history",
+      "source_id": "apollo11",
+      "claim": "The astronauts felt very nervous during the descent.",
+      "label": "UNSUPPORTED",
+      "pred": "UNSUPPORTED",
+      "confidence": 0.723,
+      "similarity": 0.35997840762138367,
+      "reasons": [
+        "best evidence similarity 0.36",
+        "no source sentence reaches support threshold 0.65"
+      ]
+    },
+    {
+      "id": "med-01",
+      "domain": "medicine",
+      "source_id": "insulin",
+      "claim": "Insulin is produced by beta cells in the pancreas.",
+      "label": "SUPPORTED",
+      "pred": "SUPPORTED",
+      "confidence": 0.993,
+      "similarity": 0.9446026086807251,
+      "reasons": [
+        "best evidence similarity 0.94"
+      ]
+    },
+    {
+      "id": "med-02",
+      "domain": "medicine",
+      "source_id": "insulin",
+      "claim": "Insulin helps cells take in sugar from the blood, lowering blood glucose.",
+      "label": "SUPPORTED",
+      "pred": "SUPPORTED",
+      "confidence": 0.803,
+      "similarity": 0.7830997109413147,
+      "reasons": [
+        "best evidence similarity 0.78"
+      ]
+    },
+    {
+      "id": "med-03",
+      "domain": "medicine",
+      "source_id": "insulin",
+      "claim": "Banting and Best first isolated insulin in 1921 at the University of Toronto.",
+      "label": "SUPPORTED",
+      "pred": "SUPPORTED",
+      "confidence": 0.995,
+      "similarity": 0.914790153503418,
+      "reasons": [
+        "best evidence similarity 0.91"
+      ]
+    },
+    {
+      "id": "med-04",
+      "domain": "medicine",
+      "source_id": "insulin",
+      "claim": "People with type 1 diabetes require insulin therapy.",
+      "label": "SUPPORTED",
+      "pred": "SUPPORTED",
+      "confidence": 0.992,
+      "similarity": 0.9172826409339905,
+      "reasons": [
+        "best evidence similarity 0.92"
+      ]
+    },
+    {
+      "id": "med-05",
+      "domain": "medicine",
+      "source_id": "insulin",
+      "claim": "Insulin was first isolated in 1925 by Frederick Banting and Charles Best.",
+      "label": "CONTRADICTED",
+      "pred": "CONTRADICTED",
+      "confidence": 1.0,
+      "similarity": 0.9411190748214722,
+      "reasons": [
+        "best evidence similarity 0.94",
+        "number mismatch: claim says 1925, evidence says 1921",
+        "DATE mismatch: claim says '1925', evidence says '1921'",
+        "NLI contradiction p=1.00"
+      ]
+    },
+    {
+      "id": "med-06",
+      "domain": "medicine",
+      "source_id": "insulin",
+      "claim": "The first patient to receive insulin was a 12-year-old boy named Leonard Thompson.",
+      "label": "CONTRADICTED",
+      "pred": "CONTRADICTED",
+      "confidence": 1.0,
+      "similarity": 0.9577376842498779,
+      "reasons": [
+        "best evidence similarity 0.96",
+        "number mismatch: claim says 12, evidence says 14, 1922",
+        "DATE mismatch: claim says '12-year-old', evidence says '14-year-old'",
+        "NLI contradiction p=1.00"
+      ]
+    },
+    {
+      "id": "med-07",
+      "domain": "medicine",
+      "source_id": "insulin",
+      "claim": "Type 1 diabetes is usually managed first with diet, exercise, and metformin.",
+      "label": "CONTRADICTED",
+      "pred": "CONTRADICTED",
+      "confidence": 1.0,
+      "similarity": 0.8091394901275635,
+      "reasons": [
+        "best evidence similarity 0.81",
+        "number mismatch: claim says 1, evidence says 2",
+        "NLI contradiction p=0.98"
+      ]
+    },
+    {
+      "id": "med-08",
+      "domain": "medicine",
+      "source_id": "insulin",
+      "claim": "Insulin was discovered after experiments on horses at McGill University in 1919.",
+      "label": "FABRICATED",
+      "pred": "FABRICATED",
+      "confidence": 0.973,
+      "similarity": 0.6475034952163696,
+      "reasons": [
+        "best evidence similarity 0.65",
+        "not found in source: 1919, 'McGill University', '1919'"
+      ]
+    },
+    {
+      "id": "med-09",
+      "domain": "medicine",
+      "source_id": "insulin",
+      "claim": "Banting received a $50,000 prize from the Canadian government for the discovery.",
+      "label": "FABRICATED",
+      "pred": "FABRICATED",
+      "confidence": 0.992,
+      "similarity": 0.30933064222335815,
+      "reasons": [
+        "best evidence similarity 0.31",
+        "not found in source: 50000, 'Canadian'"
+      ]
+    },
+    {
+      "id": "med-10",
+      "domain": "medicine",
+      "source_id": "insulin",
+      "claim": "Insulin injections are usually painless for most patients.",
+      "label": "UNSUPPORTED",
+      "pred": "UNSUPPORTED",
+      "confidence": 0.55,
+      "similarity": 0.5845323801040649,
+      "reasons": [
+        "best evidence similarity 0.58",
+        "no source sentence reaches support threshold 0.65"
+      ]
+    },
+    {
+      "id": "tech-01",
+      "domain": "technology",
+      "source_id": "python",
+      "claim": "Python was created by Guido van Rossum.",
+      "label": "SUPPORTED",
+      "pred": "SUPPORTED",
+      "confidence": 0.995,
+      "similarity": 0.8758977651596069,
+      "reasons": [
+        "best evidence similarity 0.88"
+      ]
+    },
+    {
+      "id": "tech-02",
+      "domain": "technology",
+      "source_id": "python",
+      "claim": "The first version of Python was released in 1991.",
+      "label": "SUPPORTED",
+      "pred": "SUPPORTED",
+      "confidence": 0.705,
+      "similarity": 0.6759665012359619,
+      "reasons": [
+        "best evidence similarity 0.68"
+      ]
+    },
+    {
+      "id": "tech-03",
+      "domain": "technology",
+      "source_id": "python",
+      "claim": "Python uses indentation to define code blocks.",
+      "label": "SUPPORTED",
+      "pred": "SUPPORTED",
+      "confidence": 0.993,
+      "similarity": 0.9244986772537231,
+      "reasons": [
+        "best evidence similarity 0.92"
+      ]
+    },
+    {
+      "id": "tech-04",
+      "domain": "technology",
+      "source_id": "python",
+      "claim": "Python 3.0, released in 2008, was not backward compatible with Python 2.",
+      "label": "SUPPORTED",
+      "pred": "SUPPORTED",
+      "confidence": 0.995,
+      "similarity": 0.9894261360168457,
+      "reasons": [
+        "best evidence similarity 0.99"
+      ]
+    },
+    {
+      "id": "tech-05",
+      "domain": "technology",
+      "source_id": "python",
+      "claim": "Support for Python 2 officially ended on January 1, 2018.",
+      "label": "CONTRADICTED",
+      "pred": "CONTRADICTED",
+      "confidence": 1.0,
+      "similarity": 0.9803686738014221,
+      "reasons": [
+        "best evidence similarity 0.98",
+        "number mismatch: claim says 2018, evidence says 1, 2, 2020",
+        "DATE mismatch: claim says 'January 1, 2018', evidence says 'January 1, 2020'",
+        "NLI contradiction p=0.99"
+      ]
+    },
+    {
+      "id": "tech-06",
+      "domain": "technology",
+      "source_id": "python",
+      "claim": "Python 3.0 was fully backward compatible with Python 2.",
+      "label": "CONTRADICTED",
+      "pred": "CONTRADICTED",
+      "confidence": 1.0,
+      "similarity": 0.911016583442688,
+      "reasons": [
+        "best evidence similarity 0.91",
+        "polarity mismatch: negation differs from evidence",
+        "NLI contradiction p=1.00"
+      ]
+    },
+    {
+      "id": "tech-07",
+      "domain": "technology",
+      "source_id": "python",
+      "claim": "Python is a high-level programming language created by James Gosling.",
+      "label": "CONTRADICTED",
+      "pred": "CONTRADICTED",
+      "confidence": 1.0,
+      "similarity": 0.8355156779289246,
+      "reasons": [
+        "best evidence similarity 0.84",
+        "PERSON mismatch: claim says 'James Gosling', evidence says 'Guido van Rossum'",
+        "NLI contradiction p=1.00"
+      ]
+    },
+    {
+      "id": "tech-08",
+      "domain": "technology",
+      "source_id": "python",
+      "claim": "Python was originally developed at Google's Mountain View campus.",
+      "label": "FABRICATED",
+      "pred": "FABRICATED",
+      "confidence": 0.881,
+      "similarity": 0.6244276762008667,
+      "reasons": [
+        "best evidence similarity 0.62",
+        "not found in source: 'Google', 'Mountain View'"
+      ]
+    },
+    {
+      "id": "tech-09",
+      "domain": "technology",
+      "source_id": "python",
+      "claim": "The Python Software Foundation has an annual budget of $9 million.",
+      "label": "FABRICATED",
+      "pred": "FABRICATED",
+      "confidence": 0.865,
+      "similarity": 0.6712255477905273,
+      "reasons": [
+        "best evidence similarity 0.67",
+        "not found in source: 1e+06, 9"
+      ]
+    },
+    {
+      "id": "tech-10",
+      "domain": "technology",
+      "source_id": "python",
+      "claim": "Python is the easiest language for beginners to learn.",
+      "label": "UNSUPPORTED",
+      "pred": "UNSUPPORTED",
+      "confidence": 0.503,
+      "similarity": 0.6464038491249084,
+      "reasons": [
+        "best evidence similarity 0.65",
+        "no source sentence reaches support threshold 0.65"
+      ]
+    },
+    {
+      "id": "fin-01",
+      "domain": "finance",
+      "source_id": "northwind",
+      "claim": "Northwind Robotics reported third-quarter revenue of $412 million.",
+      "label": "SUPPORTED",
+      "pred": "SUPPORTED",
+      "confidence": 0.992,
+      "similarity": 0.9632591009140015,
+      "reasons": [
+        "best evidence similarity 0.96"
+      ]
+    },
+    {
+      "id": "fin-02",
+      "domain": "finance",
+      "source_id": "northwind",
+      "claim": "Revenue grew 18% compared with the same quarter a year earlier.",
+      "label": "SUPPORTED",
+      "pred": "SUPPORTED",
+      "confidence": 0.995,
+      "similarity": 0.5158765316009521,
+      "reasons": [
+        "best evidence similarity 0.52"
+      ]
+    },
+    {
+      "id": "fin-03",
+      "domain": "finance",
+      "source_id": "northwind",
+      "claim": "The warehouse automation segment made up 61% of total revenue.",
+      "label": "SUPPORTED",
+      "pred": "SUPPORTED",
+      "confidence": 0.996,
+      "similarity": 0.9739429354667664,
+      "reasons": [
+        "best evidence similarity 0.97"
+      ]
+    },
+    {
+      "id": "fin-04",
+      "domain": "finance",
+      "source_id": "northwind",
+      "claim": "The company raised its full-year revenue guidance to $1.6 billion.",
+      "label": "SUPPORTED",
+      "pred": "SUPPORTED",
+      "confidence": 1.0,
+      "similarity": 0.9999999403953552,
+      "reasons": [
+        "best evidence similarity 1.00"
+      ]
+    },
+    {
+      "id": "fin-05",
+      "domain": "finance",
+      "source_id": "northwind",
+      "claim": "Net income for the quarter was $73 million.",
+      "label": "CONTRADICTED",
+      "pred": "CONTRADICTED",
+      "confidence": 1.0,
+      "similarity": 0.7541196346282959,
+      "reasons": [
+        "best evidence similarity 0.75",
+        "number mismatch: claim says 73, evidence says 37, 1e+06",
+        "NLI contradiction p=0.98"
+      ]
+    },
+    {
+      "id": "fin-06",
+      "domain": "finance",
+      "source_id": "northwind",
+      "claim": "Northwind Robotics employs approximately 4,200 people and is headquartered in Cleveland.",
+      "label": "CONTRADICTED",
+      "pred": "CONTRADICTED",
+      "confidence": 1.0,
+      "similarity": 0.8995251059532166,
+      "reasons": [
+        "best evidence similarity 0.90",
+        "GPE mismatch: claim says 'Cleveland', evidence says 'Pittsburgh'",
+        "NLI contradiction p=1.00"
+      ]
+    },
+    {
+      "id": "fin-07",
+      "domain": "finance",
+      "source_id": "northwind",
+      "claim": "Chief Executive Officer Dana Whitfield said demand from logistics customers weakened.",
+      "label": "CONTRADICTED",
+      "pred": "CONTRADICTED",
+      "confidence": 0.879,
+      "similarity": 0.7788711786270142,
+      "reasons": [
+        "best evidence similarity 0.78",
+        "NLI contradiction p=1.00"
+      ]
+    },
+    {
+      "id": "fin-08",
+      "domain": "finance",
+      "source_id": "northwind",
+      "claim": "The company announced a $200 million share buyback program.",
+      "label": "FABRICATED",
+      "pred": "FABRICATED",
+      "confidence": 0.867,
+      "similarity": 0.37861695885658264,
+      "reasons": [
+        "best evidence similarity 0.38",
+        "not found in source: 200"
+      ]
+    },
+    {
+      "id": "fin-09",
+      "domain": "finance",
+      "source_id": "northwind",
+      "claim": "Northwind Robotics plans to open a new factory in Monterrey, Mexico next year.",
+      "label": "FABRICATED",
+      "pred": "FABRICATED",
+      "confidence": 0.884,
+      "similarity": 0.6168203353881836,
+      "reasons": [
+        "best evidence similarity 0.62",
+        "not found in source: 'Monterrey', 'Mexico'"
+      ]
+    },
+    {
+      "id": "fin-10",
+      "domain": "finance",
+      "source_id": "northwind",
+      "claim": "Analysts expect the stock price to rise after the announcement.",
+      "label": "UNSUPPORTED",
+      "pred": "UNSUPPORTED",
+      "confidence": 0.787,
+      "similarity": 0.2767426371574402,
+      "reasons": [
+        "best evidence similarity 0.28",
+        "no source sentence reaches support threshold 0.65"
+      ]
+    }
+  ]
+}

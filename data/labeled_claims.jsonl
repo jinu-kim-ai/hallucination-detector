@@ -1,0 +1,50 @@
+{"id": "sci-01", "domain": "science", "source_id": "curie", "claim": "Marie Curie was born in Warsaw in 1867.", "label": "SUPPORTED"}
+{"id": "sci-02", "domain": "science", "source_id": "curie", "claim": "Curie and her husband discovered polonium and radium in 1898.", "label": "SUPPORTED"}
+{"id": "sci-03", "domain": "science", "source_id": "curie", "claim": "She was the first person to win Nobel Prizes in two different sciences.", "label": "SUPPORTED"}
+{"id": "sci-04", "domain": "science", "source_id": "curie", "claim": "Curie won the Nobel Prize in Chemistry in 1911.", "label": "SUPPORTED"}
+{"id": "sci-05", "domain": "science", "source_id": "curie", "claim": "Marie Curie moved to Paris in 1895 to study at the University of Paris.", "label": "CONTRADICTED"}
+{"id": "sci-06", "domain": "science", "source_id": "curie", "claim": "In 1903 she shared the Nobel Prize in Chemistry with Pierre Curie and Henri Becquerel.", "label": "CONTRADICTED"}
+{"id": "sci-07", "domain": "science", "source_id": "curie", "claim": "Marie Curie taught at Oxford University from 1920 to 1925.", "label": "FABRICATED"}
+{"id": "sci-08", "domain": "science", "source_id": "curie", "claim": "Her daughter Irene founded a research institute in Lyon in 1945.", "label": "FABRICATED"}
+{"id": "sci-09", "domain": "science", "source_id": "curie", "claim": "Marie Curie was known for her calm and patient teaching style.", "label": "UNSUPPORTED"}
+{"id": "sci-10", "domain": "science", "source_id": "curie", "claim": "Marie Curie died in 1938 from aplastic anemia.", "label": "CONTRADICTED"}
+{"id": "his-01", "domain": "history", "source_id": "apollo11", "claim": "Apollo 11 launched from Kennedy Space Center on July 16, 1969.", "label": "SUPPORTED"}
+{"id": "his-02", "domain": "history", "source_id": "apollo11", "claim": "The lunar module Eagle landed in the Sea of Tranquility on July 20, 1969.", "label": "SUPPORTED"}
+{"id": "his-03", "domain": "history", "source_id": "apollo11", "claim": "Michael Collins stayed in lunar orbit aboard the command module Columbia.", "label": "SUPPORTED"}
+{"id": "his-04", "domain": "history", "source_id": "apollo11", "claim": "Aldrin stepped onto the Moon roughly 19 minutes after Armstrong.", "label": "SUPPORTED"}
+{"id": "his-05", "domain": "history", "source_id": "apollo11", "claim": "The astronauts collected about 45 kilograms of lunar samples.", "label": "CONTRADICTED"}
+{"id": "his-06", "domain": "history", "source_id": "apollo11", "claim": "The mission splashed down in the Atlantic Ocean on July 24, 1969.", "label": "CONTRADICTED"}
+{"id": "his-07", "domain": "history", "source_id": "apollo11", "claim": "Buzz Aldrin was the first person to walk on the Moon.", "label": "CONTRADICTED"}
+{"id": "his-08", "domain": "history", "source_id": "apollo11", "claim": "The crew trained for the landing at Edwards Air Force Base in Nevada.", "label": "FABRICATED"}
+{"id": "his-09", "domain": "history", "source_id": "apollo11", "claim": "The Saturn V rocket for the mission was assembled in Huntsville by 12,000 engineers.", "label": "FABRICATED"}
+{"id": "his-10", "domain": "history", "source_id": "apollo11", "claim": "The astronauts felt very nervous during the descent.", "label": "UNSUPPORTED"}
+{"id": "med-01", "domain": "medicine", "source_id": "insulin", "claim": "Insulin is produced by beta cells in the pancreas.", "label": "SUPPORTED"}
+{"id": "med-02", "domain": "medicine", "source_id": "insulin", "claim": "Insulin helps cells take in sugar from the blood, lowering blood glucose.", "label": "SUPPORTED"}
+{"id": "med-03", "domain": "medicine", "source_id": "insulin", "claim": "Banting and Best first isolated insulin in 1921 at the University of Toronto.", "label": "SUPPORTED"}
+{"id": "med-04", "domain": "medicine", "source_id": "insulin", "claim": "People with type 1 diabetes require insulin therapy.", "label": "SUPPORTED"}
+{"id": "med-05", "domain": "medicine", "source_id": "insulin", "claim": "Insulin was first isolated in 1925 by Frederick Banting and Charles Best.", "label": "CONTRADICTED"}
+{"id": "med-06", "domain": "medicine", "source_id": "insulin", "claim": "The first patient to receive insulin was a 12-year-old boy named Leonard Thompson.", "label": "CONTRADICTED"}
+{"id": "med-07", "domain": "medicine", "source_id": "insulin", "claim": "Type 1 diabetes is usually managed first with diet, exercise, and metformin.", "label": "CONTRADICTED"}
+{"id": "med-08", "domain": "medicine", "source_id": "insulin", "claim": "Insulin was discovered after experiments on horses at McGill University in 1919.", "label": "FABRICATED"}
+{"id": "med-09", "domain": "medicine", "source_id": "insulin", "claim": "Banting received a $50,000 prize from the Canadian government for the discovery.", "label": "FABRICATED"}
+{"id": "med-10", "domain": "medicine", "source_id": "insulin", "claim": "Insulin injections are usually painless for most patients.", "label": "UNSUPPORTED"}
+{"id": "tech-01", "domain": "technology", "source_id": "python", "claim": "Python was created by Guido van Rossum.", "label": "SUPPORTED"}
+{"id": "tech-02", "domain": "technology", "source_id": "python", "claim": "The first version of Python was released in 1991.", "label": "SUPPORTED"}
+{"id": "tech-03", "domain": "technology", "source_id": "python", "claim": "Python uses indentation to define code blocks.", "label": "SUPPORTED"}
+{"id": "tech-04", "domain": "technology", "source_id": "python", "claim": "Python 3.0, released in 2008, was not backward compatible with Python 2.", "label": "SUPPORTED"}
+{"id": "tech-05", "domain": "technology", "source_id": "python", "claim": "Support for Python 2 officially ended on January 1, 2018.", "label": "CONTRADICTED"}
+{"id": "tech-06", "domain": "technology", "source_id": "python", "claim": "Python 3.0 was fully backward compatible with Python 2.", "label": "CONTRADICTED"}
+{"id": "tech-07", "domain": "technology", "source_id": "python", "claim": "Python is a high-level programming language created by James Gosling.", "label": "CONTRADICTED"}
+{"id": "tech-08", "domain": "technology", "source_id": "python", "claim": "Python was originally developed at Google's Mountain View campus.", "label": "FABRICATED"}
+{"id": "tech-09", "domain": "technology", "source_id": "python", "claim": "The Python Software Foundation has an annual budget of $9 million.", "label": "FABRICATED"}
+{"id": "tech-10", "domain": "technology", "source_id": "python", "claim": "Python is the easiest language for beginners to learn.", "label": "UNSUPPORTED"}
+{"id": "fin-01", "domain": "finance", "source_id": "northwind", "claim": "Northwind Robotics reported third-quarter revenue of $412 million.", "label": "SUPPORTED"}
+{"id": "fin-02", "domain": "finance", "source_id": "northwind", "claim": "Revenue grew 18% compared with the same quarter a year earlier.", "label": "SUPPORTED"}
+{"id": "fin-03", "domain": "finance", "source_id": "northwind", "claim": "The warehouse automation segment made up 61% of total revenue.", "label": "SUPPORTED"}
+{"id": "fin-04", "domain": "finance", "source_id": "northwind", "claim": "The company raised its full-year revenue guidance to $1.6 billion.", "label": "SUPPORTED"}
+{"id": "fin-05", "domain": "finance", "source_id": "northwind", "claim": "Net income for the quarter was $73 million.", "label": "CONTRADICTED"}
+{"id": "fin-06", "domain": "finance", "source_id": "northwind", "claim": "Northwind Robotics employs approximately 4,200 people and is headquartered in Cleveland.", "label": "CONTRADICTED"}
+{"id": "fin-07", "domain": "finance", "source_id": "northwind", "claim": "Chief Executive Officer Dana Whitfield said demand from logistics customers weakened.", "label": "CONTRADICTED"}
+{"id": "fin-08", "domain": "finance", "source_id": "northwind", "claim": "The company announced a $200 million share buyback program.", "label": "FABRICATED"}
+{"id": "fin-09", "domain": "finance", "source_id": "northwind", "claim": "Northwind Robotics plans to open a new factory in Monterrey, Mexico next year.", "label": "FABRICATED"}
+{"id": "fin-10", "domain": "finance", "source_id": "northwind", "claim": "Analysts expect the stock price to rise after the announcement.", "label": "UNSUPPORTED"}
