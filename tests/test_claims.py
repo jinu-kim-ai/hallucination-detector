@@ -219,9 +219,50 @@ def test_conjunct_with_its_own_negation_shares_the_auxiliary(extract, response, 
     ("Revenue was not affected and never declined.", ["Revenue was not affected.", "Revenue never declined."]),
     ("The patient was diagnosed in 2019 and never relapsed.",
      ["The patient was diagnosed in 2019.", "The patient never relapsed."]),
+    # A verb that takes no object, or one with a particle or complement, is active: the verb stays as written.
+    ("The senator was indicted in 2015 and never apologized.",
+     ["The senator was indicted in 2015.", "The senator never apologized."]),
+    ("The prisoner was released in 1990 and never reoffended.",
+     ["The prisoner was released in 1990.", "The prisoner never reoffended."]),
+    ("The company was founded in 1990 and never looked back.",
+     ["The company was founded in 1990.", "The company never looked back."]),
+    ("The startup was founded in 2010 and never turned profitable.",
+     ["The startup was founded in 2010.", "The startup never turned profitable."]),
+    ("He was elected in 2000 and never wavered.", ["He was elected in 2000.", "He never wavered."]),
+    ("The painting was stolen in 1990 and never resurfaced.",
+     ["The painting was stolen in 1990.", "The painting never resurfaced."]),
 ])
 def test_active_conjunct_after_never_does_not_take_a_passive_auxiliary(extract, response, expected):
     assert texts(extract(response)) == expected
+
+
+def test_irregular_participle_after_never_keeps_the_passive_auxiliary(extract):
+    assert texts(extract("The house was sold in 1990 and never seen again.")) == [
+        "The house was sold in 1990.", "The house was never seen again."]
+
+
+@pytest.mark.parametrize("response, expected", [
+    # A regular -ed participle with no sign of being active stays passive: never "The suspect never charged."
+    ("The suspect was arrested in 2019 but never charged.", "The suspect was never charged."),
+    ("The novel was written in 1950 but never published.", "The novel was never published."),
+    ("The bill was introduced in 2015 but never passed.", "The bill was never passed."),
+    ("The album was recorded in 1967 but never released.", "The album was never released."),
+    ("The plan was proposed in 2008 and never implemented.", "The plan was never implemented."),
+    ("The case was investigated by the FBI but never prosecuted.", "The case was never prosecuted."),
+    ("The law was enacted in 1920 but never enforced.", "The law was never enforced."),
+    ("The species was described in 1850 and never observed again.", "The species was never observed again."),
+    # A perfect "has" fits an active verb too.
+    ("The company has grown steadily and never been profitable.", "The company has never been profitable."),
+])
+def test_passive_conjunct_after_never_keeps_the_auxiliary(extract, response, expected):
+    assert texts(extract(response))[-1] == expected
+
+
+def test_active_conjunct_after_never_is_supported(detector):
+    report = detector.detect("The prisoner was released in 1990 and never reoffended.",
+                             "The prisoner was released in 1990. He never reoffended.")
+    assert [v.claim.text for v in report.verdicts] == ["The prisoner was released in 1990.", "The prisoner never reoffended."]
+    assert [v.label for v in report.verdicts] == [SUPPORTED, SUPPORTED]
 
 
 @pytest.mark.parametrize("response", [
@@ -311,6 +352,11 @@ def test_object_relative_goes_back_where_it_was_taken_from(extract, response, ex
     # The verb's number rules out the inner noun: "was" is not "the founders".
     ("One of the founders, who was born in Ulm, left in 1990.", "One of the founders was born in Ulm."),
     ("One of the founders, who were all engineers, was born in Ulm.", "The founders were all engineers."),
+    # After "one of" a plural pronoun: a singular verb describes "one", never "Them was born in ...".
+    ("One of them, who was born in Moscow, still runs the company.", "One of them was born in Moscow."),
+    ("One of them, who was born in Ulm, left.", "One of them was born in Ulm."),
+    ("One of these, which was launched in 1977, is still operating.", "One of these was launched in 1977."),
+    ("One of us, who was there, saw the crash.", "One of us was there."),
     # A quantity head: the clause describes the whole phrase.
     ("The price of oil, which rose 5 percent, hit a record.", "The price of oil rose 5 percent."),
     ("The number of users, which grew to 2 billion in 2023, keeps rising.",
@@ -320,6 +366,7 @@ def test_object_relative_goes_back_where_it_was_taken_from(extract, response, ex
     # A name that spaCy labels DATE is still the noun the clause describes.
     ("Malaysia Airlines Flight 370, which disappeared in 2014, was never found.",
      "Malaysia Airlines Flight 370 disappeared in 2014."),
+    ("Investigators searched for Flight 370, which vanished in 2014.", "Flight 370 vanished in 2014."),
 ])
 def test_relative_clause_after_of_describes_the_right_noun(extract, response, described):
     assert texts(extract(response))[-1] == described
@@ -368,6 +415,9 @@ def test_false_year_in_a_relative_clause_after_a_mislabelled_name_is_contradicte
     "Tesla delivered 1.8 million cars in 2023, which was up 50 percent from 2022.",
     "The population of Houston grew to 2.3 million in 2020, which made it the third-largest city in the United States.",
     "Boeing built the 747, which first flew in 1972.",
+    # A month or weekday name is a date, not the noun "which" describes: no "March surprised investors."
+    "The Fed raised rates in March, which surprised investors.",
+    "The meeting was held on Monday, which upset the staff.",
 ])
 def test_clause_level_which_stays_with_its_clause(extract, response):
     assert texts(extract(response)) == [response]
@@ -385,6 +435,10 @@ def test_clause_level_which_stays_with_its_clause(extract, response):
       "CFO Desmond Okafor attributed this mainly to cheaper components."]),
     ("Revenue reached $394 billion, which Tim Cook called a disappointment.",
      ["Revenue reached $394 billion.", "Tim Cook called this a disappointment."]),
+    ("The Fed raised rates in March, which Powell defended in testimony.",
+     ["The Fed raised rates in March.", "Powell defended this in testimony."]),
+    ("The Fed raised rates in March 2022, which Powell defended in testimony.",
+     ["The Fed raised rates in March 2022.", "Powell defended this in testimony."]),
 ])
 def test_attribution_of_a_whole_clause_is_split_but_checked_with_it(extract, response, expected):
     claims = extract(response)
@@ -480,6 +534,107 @@ def test_pronoun_that_could_mean_a_named_object_is_left_alone(extract, response)
 def test_person_pronoun_after_a_named_person_object_is_left_alone(extract, response):
     claim = extract(response)[-1]
     assert claim.resolved_text == claim.text
+
+
+@pytest.mark.parametrize("response, pronoun, referent, rival", [
+    ("Marie Curie married Pierre Curie in 1895. She died in 1906.", "she", "Marie Curie", "Pierre Curie"),
+    ("Barack Obama defeated John McCain in 2008. He was born in Arizona.", "he", "Barack Obama", "John McCain"),
+    # "it" is guarded too: Microsoft and LinkedIn were each founded in some year.
+    ("Microsoft acquired LinkedIn in 2016. It was founded in 1975.", "it", "Microsoft", "LinkedIn"),
+    # A second person in the subject itself is a rival as much as an object is.
+    ("Marie Curie and Pierre Curie discovered radium in 1898. He died in 1906.", "he", "Marie Curie", "Pierre Curie"),
+    ("Bill Gates and Paul Allen founded Microsoft in 1975. He served as CEO until 2000.", "he", "Bill Gates",
+     "Paul Allen"),
+])
+def test_ambiguous_pronoun_names_both_candidates(extract, response, pronoun, referent, rival):
+    claim = extract(response)[-1]
+    assert claim.resolved_text == claim.text
+    assert (claim.ambiguous_pronoun, claim.pronoun_referent, claim.pronoun_rival) == (pronoun, referent, rival)
+
+
+def test_resolved_or_unrivalled_pronoun_has_no_candidates(extract):
+    for claim in extract("Marie Curie was born in Warsaw. She died in 1934. It is true that she won two prizes."):
+        assert (claim.ambiguous_pronoun, claim.pronoun_referent, claim.pronoun_rival) == (None, None, None)
+    dummy = extract("Microsoft acquired LinkedIn in 2016. It is estimated that LinkedIn has 900 million users.")[-1]
+    assert dummy.ambiguous_pronoun is None
+
+
+@pytest.mark.parametrize("claim_year", ["1975", "2002"])
+def test_ambiguous_it_accepts_evidence_about_either_candidate(detector, claim_year):
+    """'it' is never resolved to the subject (that could invent a contradiction), but it is not guarded either:
+    after "X acquired Y" the object is often what is meant, so evidence about Microsoft or LinkedIn may support it."""
+    report = detector.detect(
+        f"Microsoft acquired LinkedIn in 2016. It was founded in {claim_year}.",
+        "Microsoft acquired LinkedIn in 2016 for $26.2 billion. Microsoft was founded in 1975 by Bill Gates and Paul "
+        "Allen. LinkedIn was founded in 2002.")
+    second = report.verdicts[1]
+    assert second.claim.ambiguous_pronoun == "it"
+    assert second.label == SUPPORTED
+
+
+@pytest.mark.parametrize("response, expected", [
+    ("The fund was announced in 2010 but never set up.", "The fund was never set up."),
+    ("The wallet was found in 2019 but never handed back.", "The wallet was never handed back."),
+    ("The defendant was arrested in 2015 but never declared guilty.", "The defendant was never declared guilty."),
+    ("The suspect was arrested in 2019 but never charged.", "The suspect was never charged."),
+    ("The company was founded in 1999 and never looked back.", "The company never looked back."),
+    ("The startup was funded in 2015 and never turned profitable.", "The startup never turned profitable."),
+    ("The senator was indicted in 2015 and never apologized.", "The senator never apologized."),
+])
+def test_passive_after_never_keeps_was_only_when_it_fits(extract, response, expected):
+    assert extract(response)[-1].text == expected
+
+
+def test_it_with_an_ability_predicate_is_not_a_dummy_it(extract):
+    claim = extract("The vaccine was approved in 2020. It was able to show that infections dropped.")[-1]
+    assert claim.resolved_text == "The vaccine was able to show that infections dropped."
+    assert extract("The report was published in 2021. It is important to note that sales fell.")[-1].resolved_text ==         "It is important to note that sales fell."
+
+
+@pytest.mark.parametrize("response, resolved", [
+    # A person "with" or "by" the subject, or a parent, does not compete with the subject of a biography.
+    ("Albert Einstein was born in Ulm in 1879. He worked with Marcel Grossmann on general relativity. He won the "
+     "Nobel Prize in Physics in 1921.", "Albert Einstein won the Nobel Prize in Physics in 1921."),
+    ("Steve Jobs co-founded Apple with Steve Wozniak in 1976. He was born in San Francisco.",
+     "Steve Jobs was born in San Francisco."),
+    ("Marie Curie was mentored by Gabriel Lippmann. She won the Nobel Prize in 1903.",
+     "Marie Curie won the Nobel Prize in 1903."),
+    ("Albert Einstein was born to Hermann Einstein and Pauline Koch. He won the Nobel Prize in Physics in 1921.",
+     "Albert Einstein won the Nobel Prize in Physics in 1921."),
+])
+def test_person_named_with_the_subject_does_not_block_resolution(extract, response, resolved):
+    claim = extract(response)[-1]
+    assert claim.resolved_text == resolved
+    assert claim.ambiguous_pronoun is None
+
+
+def test_biography_pronoun_after_a_coworker_is_supported(detector):
+    report = detector.detect(
+        "Steve Jobs co-founded Apple with Steve Wozniak in 1976. He was born in San Francisco.",
+        "Steve Jobs co-founded Apple with Steve Wozniak in 1976. Steve Jobs was born in San Francisco in 1955. "
+        "Wozniak was born in San Jose.")
+    assert report.verdicts[1].claim.resolved_text == "Steve Jobs was born in San Francisco."
+    assert report.verdicts[1].label == SUPPORTED
+
+
+@pytest.mark.parametrize("response", [
+    "Apple acquired Beats in 2014. It is worth noting that the deal cost $3 billion.",
+    "Microsoft acquired LinkedIn in 2016. It took three years to integrate the two companies.",
+])
+def test_dummy_it_after_a_named_object_is_not_ambiguous(extract, response):
+    claim = extract(response)[-1]
+    assert claim.ambiguous_pronoun is None
+    assert claim.resolved_text == claim.text
+
+
+@pytest.mark.parametrize("response, source", [
+    ("Apple acquired Beats in 2014. It is worth noting that the deal cost $3 billion.",
+     "Apple acquired Beats in 2014. The deal cost $3 billion."),
+    ("Microsoft acquired LinkedIn in 2016. It took three years to integrate the two companies.",
+     "Microsoft acquired LinkedIn in 2016. It took three years to integrate the two companies."),
+])
+def test_dummy_it_claim_stated_in_the_source_is_supported(detector, response, source):
+    assert [v.label for v in detector.detect(response, source).verdicts] == [SUPPORTED, SUPPORTED]
 
 
 @pytest.mark.parametrize("response, source", [

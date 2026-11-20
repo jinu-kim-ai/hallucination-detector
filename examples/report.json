@@ -18,6 +18,7 @@
       ],
       "label": "SUPPORTED",
       "confidence": 0.981,
+      "best_similarity": 0.866,
       "reasons": [
         "best evidence similarity 0.87"
       ],
@@ -78,6 +79,7 @@
       ],
       "label": "SUPPORTED",
       "confidence": 0.955,
+      "best_similarity": 0.856,
       "reasons": [
         "best evidence similarity 0.86"
       ],
@@ -123,6 +125,7 @@
       ],
       "label": "SUPPORTED",
       "confidence": 0.996,
+      "best_similarity": 0.758,
       "reasons": [
         "best evidence similarity 0.76"
       ],
@@ -183,6 +186,7 @@
       ],
       "label": "SUPPORTED",
       "confidence": 0.972,
+      "best_similarity": 0.725,
       "reasons": [
         "best evidence similarity 0.72"
       ],
@@ -244,6 +248,7 @@
       ],
       "label": "CONTRADICTED",
       "confidence": 1.0,
+      "best_similarity": 0.832,
       "reasons": [
         "best evidence similarity 0.83",
         "number mismatch: claim says 45, evidence says 21.5",
@@ -276,6 +281,7 @@
       ],
       "label": "FABRICATED",
       "confidence": 0.84,
+      "best_similarity": 0.456,
       "reasons": [
         "best evidence similarity 0.46",
         "not found in source: 'the Atlantic Ocean'"
@@ -307,27 +313,12 @@
       ],
       "label": "FABRICATED",
       "confidence": 0.952,
+      "best_similarity": 0.422,
       "reasons": [
         "best evidence similarity 0.42",
         "not found in source: 300, 'Stanford University'"
       ],
-      "citations": [
-        {
-          "source_id": "mission-summary",
-          "sentence_index": 1,
-          "source_span": [
-            63,
-            134
-          ],
-          "quote": "The crew consisted of Neil Armstrong, Buzz Aldrin, and Michael Collins.",
-          "similarity": 0.422,
-          "nli": {
-            "contradiction": 0.894,
-            "entailment": 0.0,
-            "neutral": 0.106
-          }
-        }
-      ]
+      "citations": []
     },
     {
       "id": 8,
@@ -338,27 +329,12 @@
       ],
       "label": "UNSUPPORTED",
       "confidence": 0.88,
+      "best_similarity": 0.156,
       "reasons": [
         "best evidence similarity 0.16",
         "no source sentence reaches support threshold 0.65"
       ],
-      "citations": [
-        {
-          "source_id": "mission-summary",
-          "sentence_index": 0,
-          "source_span": [
-            0,
-            62
-          ],
-          "quote": "Apollo 11 launched from Kennedy Space Center on July 16, 1969.",
-          "similarity": 0.156,
-          "nli": {
-            "contradiction": 0.001,
-            "entailment": 0.0,
-            "neutral": 0.999
-          }
-        }
-      ]
+      "citations": []
     }
   ],
   "config": {
@@ -373,6 +349,12 @@
     "nli_threshold": 0.7,
     "nli_top_k": 3,
     "nli_context_sentences": 0,
-    "min_claim_words": 3
+    "min_claim_words": 3,
+    "min_source_words": 3,
+    "max_sentence_words": 120,
+    "min_non_ascii_letters": 3,
+    "min_ascii_letter_ratio": 0.7,
+    "min_foreign_function_words": 2,
+    "foreign_to_english_ratio": 2.0
   }
 }

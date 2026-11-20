@@ -61,6 +61,10 @@ from hallucination_detector.schemas import CONTRADICTED, FABRICATED, SUPPORTED
     ("one thousand and fifty", {1050.0}),
     # pinned reading of an ambiguous phrase: one number, not the range 100 to 50,000
     ("between one hundred and fifty thousand", {150000.0}),
+    # ...but after 'between' a bare unit word with its own scale closes a range
+    ("The firm employs between five hundred and two thousand contractors.", {500.0, 2000.0}),
+    ("between one hundred and two million users", {100.0, 2e6}),
+    ("between three hundred and five thousand dollars", {300.0, 5000.0}),
 ])
 def test_number_formats(text, expected):
     assert facts.numbers(text) == expected
@@ -182,6 +186,14 @@ def test_number_of_another_kind_is_not_a_mismatch(claim, evidence):
 ])
 def test_number_of_other_people_or_a_date_is_not_a_mismatch(claim, evidence):
     assert facts.number_mismatch(claim, evidence) is None
+
+
+def test_weekday_before_a_four_digit_count_keeps_the_count():
+    # only a month name makes the number a year; 'On Tuesday 1500 workers' is a head count
+    (q,) = facts.quantities("On Tuesday 1500 workers went on strike.")
+    assert q.kinds == frozenset({"calendar year", "person"})
+    assert facts.number_mismatch("On Tuesday 1500 workers went on strike.",
+                                 "On Tuesday 1,200 workers went on strike at the Detroit plant.") ==         "number mismatch: claim says 1500, evidence says 1200"
 
 
 def test_year_after_a_month_name_still_compares_with_years():
@@ -773,6 +785,68 @@ def test_number_kinds_do_not_depend_on_distant_text():
     ("COVID-19 cases", {19.0}),
     ("the 2021 billion-dollar deal", {2021.0, 1e9}),   # the year is not multiplied by the compound's scale
     ("a 12-year-old boy", {12.0}),
+    # any other numeral keeps the scale of a '<scale>-<word>' compound
+    ("a 1.5 million-square-foot facility", {1.5e6}),
+    ("$10 million-a-year", {1e7}),
+    ("5 million-plus users", {5e6}),
+    ("2 million-year-old", {2e6}),
+    ("a $2 million-dollar budget", {2e6}),
+    ("a 1 million-square-foot warehouse", {1e6}),
+    ("$2 billion-a-year", {2e9}),
+    ("1.5 million-strong", {1.5e6}),
+    ("4.5 million-year-old", {4.5e6}),
+    ("500 thousand-seat", {500000.0}),
 ])
 def test_hyphenated_scale_word(text, expected):
     assert facts.numbers(text) == expected
+
+
+@pytest.mark.parametrize("claim, source", [
+    ("The company opened a 1.5 million-square-foot warehouse in Columbus.",
+     "In 2022 the company opened a 1.5 million square foot warehouse in Columbus, Ohio."),
+    ("He signed a $10 million-a-year contract with the Lakers.",
+     "He signed a contract with the Lakers worth $10 million a year."),
+    ("Researchers found a 2 million-year-old fossil in the cave.",
+     "Researchers found a fossil in the cave that is 2 million years old."),
+    ("The platform has 5 million-plus users.", "The platform has more than 5 million users."),
+    ("The warehouse covers 1.5 million square feet.", "The company built a 1.5 million-square-foot warehouse."),
+    ("Amazon opened a 1 million-square-foot warehouse in Ohio in 2019.",
+     "In 2019 Amazon opened a warehouse in Ohio with 1 million square feet of floor space."),
+    ("Netflix said its ad tier had become a $2 billion-a-year business in 2024.",
+     "Netflix said its ad tier brought in $2 billion a year by 2024."),
+    # a range after 'between' is not one merged number (502,000)
+    ("The firm employs between five hundred and two thousand contractors.",
+     "The firm employs between 500 and 2,000 contractors, depending on the season."),
+    ("Between five hundred and two thousand people attended each session.", "Each session drew 500 to 2,000 people."),
+])
+def test_scale_compounds_and_word_ranges_are_supported(detector_no_nli, claim, source):
+    assert facts.number_mismatch(claim, source) is None
+    assert detector_no_nli.check_claim(claim, source).label == SUPPORTED
+
+
+@pytest.mark.parametrize("text, expected", [
+    # with no currency sign, '<count> million-dollar <nouns>' may be a count of $1M items: keep the number
+    ("The agency sold 12 million-dollar homes in Austin last year.", {12.0, 1e6}),
+    ("The club has 20 billion-dollar companies among its members.", {20.0, 1e9}),
+    ("The city approved a 300 million-dollar stadium project.", {300.0, 1e6}),
+    ("a $2 million-dollar budget", {2e6}),     # a currency sign makes it one amount
+])
+def test_currency_word_compound_keeps_the_count(text, expected):
+    assert facts.numbers(text) == expected
+
+
+@pytest.mark.parametrize("claim, source", [
+    ("The agency sold 12 million-dollar homes in Austin last year.",
+     "Last year the agency sold 12 homes in Austin, each priced above $1 million."),
+    ("The team signed 3 million-dollar free agents this offseason.",
+     "This offseason the team signed three free agents to contracts worth $1 million each."),
+    ("The startup closed 4 million-dollar deals in its first quarter.",
+     "In its first quarter, the startup closed 4 deals worth $1 million each."),
+    ("The club has 20 billion-dollar companies among its members.",
+     "Twenty companies valued at more than $1 billion are members of the club."),
+    ("The fund made 7 billion-dollar investments in 2021.",
+     "In 2021 the fund made seven investments of $1 billion each."),
+])
+def test_count_of_currency_word_compounds_is_supported(detector_no_nli, claim, source):
+    assert facts.number_mismatch(claim, source) is None
+    assert detector_no_nli.check_claim(claim, source).label == SUPPORTED

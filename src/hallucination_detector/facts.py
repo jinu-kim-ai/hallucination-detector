@@ -37,7 +37,7 @@ _STRONG_KINDS = {"money", "%", "time", "calendar year", "day"}
 # Nouns that all count people: '300 workers' and '1,500 people' state the same fact. 'member' is left out:
 # '5,000 members' of a club and '27 member states' are not a head count of the same people.
 _PERSON_NOUNS = {"people", "person", "employee", "worker", "staff", "staffer", "personnel", "individual"}
-# A preposition (or a month or weekday name, see _kinds) before a 4-digit number makes it a year even when a
+# A preposition (or a month name, see _kinds) before a 4-digit number makes it a year even when a
 # noun follows ('in 1998 workers ...', 'In March 2020 workers ...'). An article does not: 'the 1500 employees'
 # is a head count as often as 'the 2019 workers' strike' is a year, so such a number keeps both kinds.
 _YEAR_PREPS = {"in", "by", "since", "from", "until", "till", "during", "of", "before", "after", "circa"}
@@ -54,8 +54,8 @@ _DECREASE_AFTER_RE = re.compile(r"(?: ?%| percent| per cent)?[ -](?:decline|decr
 # Lower-case k/m/b only scale after a currency sign, so '5 m' (meters) is not 5 million.
 _NUM_RE = re.compile(
     r"(?<![\w.])(?P<sign>-)?(?P<cur>[$\u20ac\u00a3])?(?P<num>(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)"
-    # '$5 million' and '$5-million'; not 'the 2021 billion-dollar deal', where the scale belongs to a compound
-    r"(?:[\s-]?(?P<scale>(?i:thousand|million|billion|trillion))\b(?!-)"
+    # '$5 million', '$5-million', 'a 1.5 million-square-foot site'; a bare year keeps no scale (see _scan)
+    r"(?:[\s-]?(?P<scale>(?i:thousand|million|billion|trillion))\b"
     r"|(?P<abbr>(?(cur)(?i:bn|k|m|b)|(?:bn|K|M|B)))\b"
     r"|(?P<ord>st|nd|rd|th)\b)?")
 _TRANS = str.maketrans({"\u2018": "'", "\u2019": "'", "\u02bc": "'", "\u201c": '"', "\u201d": '"',
@@ -145,11 +145,32 @@ def _scan(text: str) -> tuple[str, list[tuple[int, int, Quantity]]]:
     t = re.sub(r"\s+", " ", text.translate(_TRANS))
     low = t.lower()
     out, masked = [], list(low)
-    for m in _NUM_RE.finditer(t):
+    pos = 0
+    while m := _NUM_RE.search(t, pos):
+        if _year_before_compound(m, t) or _count_before_currency_compound(m, t):
+            # 'the 2021 billion-dollar deal', '12 million-dollar homes': the scale belongs to the compound,
+            # so match the number alone and leave the scale word to _word_quantities
+            m = _NUM_RE.match(t, m.start(), m.end("num"))
+        pos = m.end()
         out.append((m.start(), m.end(), _numeral(m, t, low)))
         masked[m.start():m.end()] = " " * (m.end() - m.start())     # 'million' in '$2 million' is not read again
     out += _word_quantities(t, low, "".join(masked))
     return t, out
+
+
+def _year_before_compound(m: re.Match, t: str) -> bool:
+    """A bare 4-digit year whose scale word opens a hyphenated compound ('the 2021 billion-dollar deal').
+    '1.5 million-square-foot', '$10 million-a-year' and '$5-million' keep their scale."""
+    return bool(m["scale"] and not (m["cur"] or m["sign"]) and t.startswith("-", m.end())
+                and re.fullmatch(r"\d{4}", m["num"]) and 1000 <= int(m["num"]) <= 2100)
+
+
+def _count_before_currency_compound(m: re.Match, t: str) -> bool:
+    """A number with no currency sign before a '<scale>-dollar' compound: '12 million-dollar homes' is
+    twelve homes of $1 million each as often as one $12 million amount, so keep the number as written.
+    '$2 million-dollar' (with a sign) and '1.5 million-square-foot' keep their scale."""
+    return bool(m["scale"] and not m["cur"]
+                and re.match(r"-(?:dollar|pound|euro)s?\b", t[m.end():], re.IGNORECASE))
 
 
 def _numeral(m: re.Match, t: str, low: str) -> Quantity:
@@ -174,7 +195,9 @@ def _word_quantities(t: str, low: str, masked: str) -> list[tuple[int, int, Quan
         if value is None:
             i += 1
             continue
-        value, j = _compound(words, j, masked, value)
+        # 'between five hundred and two thousand' is a range (500 to 2,000), see _group_after_scale
+        between = _joined(words, i, masked) and words[i - 1].group() == "between"
+        value, j = _compound(words, j, masked, value, between)
         start, end = words[i].start(), words[j - 1].end()
         kinds = _kinds(t, low, start, end, False, False)
         ordinal = words[j - 1].group() in _ORDINAL_WORDS and "day" not in kinds
@@ -195,7 +218,8 @@ def _scale_at(words: list[re.Match], j: int, masked: str) -> float:
     return _SCALES.get(words[j].group(), 0)
 
 
-def _compound(words: list[re.Match], j: int, masked: str, current: float) -> tuple[float, int]:
+def _compound(words: list[re.Match], j: int, masked: str, current: float,
+              between: bool = False) -> tuple[float, int]:
     """Extend the number word before j with scales and the groups between them.
 
     'one hundred and twenty' -> 120, 'one thousand nine hundred' -> 1900, 'two million three hundred
@@ -210,12 +234,13 @@ def _compound(words: list[re.Match], j: int, masked: str, current: float) -> tup
         else:
             total, current = total + current * scale, 0.0
         j += 1
-        group, j = _group_after_scale(words, j, masked, scale)
+        group, j = _group_after_scale(words, j, masked, scale, between)
         current += group
     return total + current, j
 
 
-def _group_after_scale(words: list[re.Match], j: int, masked: str, scale: float) -> tuple[float, int]:
+def _group_after_scale(words: list[re.Match], j: int, masked: str, scale: float,
+                       between: bool = False) -> tuple[float, int]:
     """The tens/units group after a scale word: 'hundred [and] twenty', 'thousand nine (hundred)'."""
     k = j + 1 if _joined(words, j, masked) and words[j].group() == "and" else j
     if not _joined(words, k, masked) or _scale_at(words, k, masked):
@@ -225,9 +250,11 @@ def _group_after_scale(words: list[re.Match], j: int, masked: str, scale: float)
         return 0.0, j
     next_scale = _scale_at(words, end, masked)
     # after 'and': 'and twenty' joins, 'and two hundred' starts a new number, and 'hundred and fifty
-    # thousand' joins too (250,000): _compound then applies the thousand to all of 'two hundred and fifty'
+    # thousand' joins too (250,000): _compound then applies the thousand to all of 'two hundred and fifty'.
+    # After 'between', a bare unit word with its own scale closes a range instead: 'between five hundred
+    # and two thousand' is 500 to 2,000 (but 'between one hundred and fifty thousand' stays 150,000).
     if k > j:
-        take = next_scale < 100 or (scale == 100 and next_scale > 100)
+        take = next_scale < 100 or (scale == 100 and next_scale > 100 and not (between and value < 10))
     else:           # 'hundred twenty'; after a larger scale only a group with its own smaller scale
         take = scale == 100 or 0 < next_scale < scale
     return (value, end) if take else (0.0, j)
@@ -283,7 +310,7 @@ def _kinds(t: str, low: str, start: int, end: int, money: bool, is_year: bool) -
         # not the "year" of "12-year-old". '1800 workers' may be a count, but 'in 1998 workers' and
         # 'March 2020 workers' are years.
         pw = prev.group(1).lower() if prev else ""
-        dated = not noun or pw in _YEAR_PREPS or pw in _CALENDAR
+        dated = not noun or pw in _YEAR_PREPS or _CALENDAR.get(pw, 99) < 12     # a month, not a weekday
         return frozenset({"calendar year"} if dated else {"calendar year", noun})
     kinds = {noun} if noun else set()
     if prev:

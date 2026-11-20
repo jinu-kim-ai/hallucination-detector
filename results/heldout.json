@@ -13,7 +13,11 @@
     "nli_context_sentences": 0,
     "min_claim_words": 3,
     "min_source_words": 3,
-    "max_sentence_words": 120
+    "max_sentence_words": 120,
+    "min_non_ascii_letters": 3,
+    "min_ascii_letter_ratio": 0.7,
+    "min_foreign_function_words": 2,
+    "foreign_to_english_ratio": 2.0
   },
   "metrics": {
     "binary_hallucination_detection": {
@@ -309,7 +313,7 @@
       "similarity": 0.4979325234889984,
       "reasons": [
         "best evidence similarity 0.50",
-        "not found in source: 1, 1779, 'Jan Ingenhousz', '1779'"
+        "not found in source: 1779, 'Jan Ingenhousz', '1779'"
       ]
     },
     {

@@ -448,3 +448,36 @@ def test_resolved_pronoun_is_still_supported(detector):
     report = detector.detect("Marie Curie was born in Warsaw. She died in 1934.",
                              "Marie Curie was born in Warsaw in 1867. Marie Curie died in 1934.")
     assert [v.label for v in report.verdicts] == [SUPPORTED, SUPPORTED]
+
+
+def test_ambiguous_pronoun_supported_by_evidence_about_the_subject_stays_supported(detector):
+    """The guard only steps in when the supporting sentence is about the rival, not the remembered subject."""
+    report = detector.detect("Marie Curie married Pierre Curie in 1895. She won a second Nobel Prize in 1911.",
+                             "Marie Curie married Pierre Curie in 1895. Marie Curie won a second Nobel Prize in 1911.")
+    assert [v.label for v in report.verdicts] == [SUPPORTED, SUPPORTED]
+
+
+@pytest.mark.parametrize("source", [
+    # the supporting sentence names neither person
+    "Steve Jobs hired John Sculley in 1983. John Sculley grew up in New York. He was born in 1939, the son of a "
+    "lawyer. Steve Jobs was born in 1955.",
+    # the supporting sentence is about the rival and mentions the subject only in passing
+    "Steve Jobs hired John Sculley in 1983. John Sculley, whom Steve Jobs recruited from Pepsi, was born in 1939.",
+])
+def test_ambiguous_he_is_supported_only_by_a_sentence_clearly_about_the_subject(detector, source):
+    verdict = detector.detect("Steve Jobs hired John Sculley in 1983. He was born in 1939.", source).verdicts[-1]
+    assert verdict.claim.ambiguous_pronoun == "he"
+    assert verdict.label == UNSUPPORTED
+
+
+@pytest.mark.parametrize("response, source", [
+    ("The FDA approved Vioxx in 1999. It was withdrawn in 2004.",
+     "The FDA approved Vioxx in 1999. Merck withdrew Vioxx from the market in 2004 over heart risks."),
+    ("Microsoft bought GitHub in 2018. It hosts more than 100 million developers.",
+     "Microsoft bought GitHub in 2018. GitHub hosts more than 100 million developers."),
+    # function words such as "the" do not count as part of a name
+    ("The Federal Reserve hired Goldman Sachs in 2019. It was founded in 1869.",
+     "The Federal Reserve hired Goldman Sachs in 2019. Goldman Sachs was founded in 1869 in the city of New York."),
+])
+def test_ambiguous_it_about_the_object_stays_supported(detector, response, source):
+    assert detector.detect(response, source).verdicts[-1].label == SUPPORTED

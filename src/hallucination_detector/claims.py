@@ -42,7 +42,8 @@ _INTRANSITIVE = frozenset({
     "graduate", "decline", "grow", "remain", "return", "succeed", "fail", "live", "work", "serve", "marry",
     "move", "stay", "rise", "fall", "recover", "settle", "travel", "appear", "disappear", "occur", "happen",
     "exist", "collapse", "evolve", "flourish", "prosper", "perish", "vanish", "erupt", "retreat",
-    "compete", "participate", "testify", "debut", "relapse"})
+    "compete", "participate", "testify", "debut", "relapse", "apologize", "apologise", "reoffend", "waver",
+    "resurface", "hesitate", "complain"})
 # Heads that say little alone, so ", which ..." after "<head> of Y" describes the whole phrase, not Y: "the rate of
 # inflation, which peaked ...". It is sometimes Y ("the cost of the project, which was led by Siemens"), but keeping
 # such a clause in its sentence would merge two facts with separate numbers into one claim.
@@ -50,6 +51,10 @@ _EMPTY_HEADS = frozenset({
     "one", "some", "most", "part", "all", "many", "few", "each", "none", "half", "rest", "majority", "minority",
     "price", "cost", "number", "share", "rate", "level", "value", "amount", "percentage", "proportion", "total"})
 _NUMERIC_ENTS = ("DATE", "TIME", "PERCENT", "MONEY", "QUANTITY", "ORDINAL", "CARDINAL")
+_CALENDAR_NAMES = frozenset(
+    "january february march april may june july august september october november december "
+    "jan feb mar apr jun jul aug sep sept oct nov dec "
+    "monday tuesday wednesday thursday friday saturday sunday mon tue tues wed thu thur thurs fri sat sun".split())
 
 
 def load_nlp(model: str = "en_core_web_sm"):
@@ -103,6 +108,7 @@ class ClaimExtractor:
                         claim.resolved_text = _finish(_join(tokens, {**piece.words, piece.subject.i: referent}))
                     elif referents.ambiguous(piece.subject):
                         claim.ambiguous_pronoun = piece.subject.lower_
+                        claim.pronoun_referent, claim.pronoun_rival = referents.candidates(piece.subject)
                     if piece.context:       # also keeps two "X credited this to Asia." from different facts apart
                         claim.resolved_text = _finish(_join(piece.context[_opener_length(piece.context):]))
                     key = _dedupe_key(claim.resolved_text)
@@ -328,14 +334,41 @@ def _shared_aux(verb) -> list:
         if any(t.dep_ == "neg" and t.i > 0 and not t.doc[t.i - 1].whitespace_ for t in shared):
             return []                                   # "can't A and never B": "ca" cannot go without its "n't"
         # spaCy tags any past form after "never" as a participle, so "was launched and never succeeded" looks like
-        # "was passed but never signed". A verb with an object or one that takes none is not passive here.
-        if verb.tag_ == "VBN" and (verb.lemma_.lower() in _INTRANSITIVE or any(c.dep_ == "dobj" for c in verb.children)):
+        # "was passed but never signed". A shared passive "was" is kept ("was arrested but [was] never charged")
+        # unless the verb shows it is active ("was indicted and never apologized" -> "never apologized"). A perfect
+        # "has" fits either voice: "has grown and [has] never been profitable".
+        if (_verb_form(head) == "VBN" and any(t.dep_ in _AUX and t.lemma_.lower() == "be" for t in shared)
+                and _looks_active(verb)):
             return []
         shared = [t for t in shared if t.dep_ != "neg" and t.lemma_.lower() != "do"]
     # An auxiliary only fits a verb of the same form; "never" alone fits any finite verb.
     if any(t.dep_ in _AUX for t in shared) and _verb_form(verb) != _verb_form(head):
         return []
     return shared
+
+
+# Verbs that are active with a particle ("never looked back", "never showed up"). Other particle verbs are
+# usually passive after "was ... never": "never set up", "never carried out", "never handed back".
+_PHRASAL_ACTIVE = frozenset("look show turn come go grow catch step stand speak wake check move settle take break "
+                            "give".split())
+# Verbs of judging or naming keep a passive "was" before a complement: "never declared guilty", "never deemed safe".
+_JUDGING = frozenset("declare deem consider find prove rule call name certify judge label rate pronounce elect "
+                     "appoint make think believe hold leave keep".split())
+
+
+def _looks_active(verb) -> bool:
+    """Whether a conjunct after "never" is plainly active, so a passive "was" does not fit it: a verb that takes no
+    object ("never apologized"), an object ("never repaid the loan"), an active particle verb ("never looked
+    back"), or a complement after a regular -ed form that is not a verb of judging ("never turned profitable";
+    "never declared guilty" stays passive)."""
+    form, lemma = verb.lower_, verb.lemma_.lower()
+    stems = {lemma} | ({form[:-2], form[:-1]} if form.endswith("ed") else set())  # "reoffende"
+    if stems & _INTRANSITIVE or any(c.dep_ == "dobj" for c in verb.children):
+        return True
+    particle = any(c.dep_ == "prt" or (c.dep_ == "advmod" and c.lower_ in ("back", "up", "out")) for c in verb.children)
+    if particle:
+        return lemma in _PHRASAL_ACTIVE
+    return form.endswith("ed") and lemma not in _JUDGING and any(c.dep_ in ("oprd", "acomp") for c in verb.children)
 
 
 def _prefix(head) -> list:
@@ -427,7 +460,21 @@ def _noun_before(anchor):
         return None
     if head.pos_ == "NOUN" and head.ent_type_ in _NUMERIC_ENTS:
         return None             # "46.2 percent", "two years"; a name is kept even if mislabelled ("Flight 370": DATE)
+    if head.pos_ == "PROPN" and _is_calendar_date(head):
+        return None             # "in March, which ...", "on Monday, which ..." describe the clause, not the month
     return head
+
+
+def _is_calendar_date(token) -> bool:
+    """A DATE / TIME entity made of a month or weekday name plus numbers ("March", "March 2022", "Monday")."""
+    if token.ent_type_ not in ("DATE", "TIME"):
+        return False
+    ent = next((e for e in token.doc.ents if e.start <= token.i < e.end), None)
+    if ent is None:
+        return False
+    names = [t for t in ent if t.lower_.rstrip(".") in _CALENDAR_NAMES]
+    rest = [t for t in ent if t.lower_.rstrip(".") not in _CALENDAR_NAMES]
+    return bool(names) and all(t.like_num or t.is_punct or t.pos_ in ("DET", "ADP", "NUM") for t in rest)
 
 
 def _antecedent(head, anchor, clause_ids: set[int], pronoun, verb=None) -> list:
@@ -447,6 +494,8 @@ def _describes_outer_noun(noun, pronoun, verb) -> bool:
     outer = noun.head.head
     number = _verb_number(verb)
     if outer.pos_ == "NUM":     # "two of the founders, who met ..." are the founders; "one of them, who was ..." is one
+        if noun.pos_ == "PRON":                             # "them" / "these" / "us" are plural: "was" means "one"
+            return number == "sing"
         return number is not None and _noun_number(noun) not in (None, number)
     if number and _noun_number(outer) not in (None, number) and _noun_number(noun) == number:
         return False                                        # "the works of Picasso, who was born ..." is singular
@@ -520,14 +569,22 @@ class _Referents:
         return getattr(self, kind)
 
     def ambiguous(self, subj) -> bool:
-        """A he / she / they subject that was left unresolved although a candidate referent exists.
+        """A he / she / it / they subject that was left unresolved although a candidate referent exists: the
+        remembered subject and a named object could both be meant ("Microsoft acquired LinkedIn. It was ...").
 
         That is different from a pronoun with nothing before it to refer to (a claim checked on its own).
         """
-        if subj is None or subj.pos_ != "PRON" or subj.lower_ not in ("he", "she", "they"):
+        if (subj is None or subj.pos_ != "PRON" or subj.lower_ not in _PRONOUN_KIND or _is_dummy_it(subj)
+                or _takes_time_to(subj)):
             return False
         kind = _PRONOUN_KIND[subj.lower_]
         return getattr(self, kind) is not None and self.resolve(subj) is None
+
+    def candidates(self, subj) -> tuple[str | None, str | None]:
+        """For an ambiguous pronoun: the remembered subject phrase and the rival's full name ("Pierre Curie")."""
+        kind = _PRONOUN_KIND.get(subj.lower_)
+        rival = self.rivals.get(kind)
+        return getattr(self, kind, None) if kind else None, _full_name(rival) if rival is not None else None
 
     def _ambiguous(self, kind: str, subj) -> bool:
         # "The FDA approved Zestril, and it became ...": "it" may be Zestril, so guessing the FDA could invent
@@ -562,11 +619,29 @@ def _rival_kinds(token) -> set[str]:
     Only objects of a verb count; "born in Warsaw" does not compete with the subject."""
     is_object = token.dep_ in ("dobj", "dative") or (token.dep_ == "attr" and token.head.lemma_ != "be")
     named = token.pos_ == "PROPN" or (token.ent_type_ != "" and token.ent_type_ not in _NUMERIC_ENTS)
+    # A second person in the subject itself is as likely to be "he" or "she": "Marie Curie and Pierre Curie
+    # discovered radium. He ...". A person "with" or "by" the subject is not ("worked with Marcel Grossmann").
+    if (token.pos_ == "PROPN" and token.ent_type_ == "PERSON" and token.dep_ == "conj"
+            and token.head.dep_ in _SUBJECT):
+        return {"person"}
     if not is_object or not named:
         return set()
     if token.ent_type_ == "PERSON":
         return {"person"}
     return {"thing", "plural"} if token.tag_ in ("NNS", "NNPS") else {"thing"}   # "acquired Beats": it or they
+
+
+def _full_name(token) -> str:
+    """The whole name a token is part of: its entity ("Pierre Curie"), else its noun chunk, else the token."""
+    span = next((e for e in token.doc.ents if e.start <= token.i < e.end), None)
+    if span is None:
+        span = next((c for c in token.doc.noun_chunks if c.start <= token.i < c.end), None)
+    return re.sub(r"\s+", " ", span.text).strip() if span is not None else token.text
+
+
+_IMPERSONAL = frozenset("important worth worthwhile necessary essential crucial vital possible impossible clear "
+                        "unclear evident obvious apparent notable noteworthy interesting fair safe reasonable easy hard "
+                        "difficult useful helpful surprising significant true fact".split())
 
 
 def _is_dummy_it(subj) -> bool:
@@ -580,11 +655,30 @@ def _is_dummy_it(subj) -> bool:
     if subj.dep_ == "nsubjpass" and "ccomp" in deps:
         return True
     if verb.lemma_ == "be" and deps & {"acomp", "attr"}:
-        # "It is easy to learn" still means the thing; "It is important to note that ..." does not.
-        xcomp_clause = any(c.dep_ == "xcomp" and any(g.dep_ == "ccomp" for g in c.children) for c in verb.children)
+        # "It is easy to learn" still means the thing; "It is important / worth noting that ..." does not.
+        # only impersonal predicates: "It was able to show that ..." is still the vaccine, not a clause
+        heads = [verb] + [c for c in verb.children if c.dep_ in ("acomp", "attr") and c.lemma_.lower() in _IMPERSONAL]
+        xcomp_clause = any(c.dep_ == "xcomp" and any(g.dep_ == "ccomp" for g in c.children)
+                           for h in heads for c in h.children)
         if deps & {"ccomp", "csubj"} or xcomp_clause:
             return True
     return verb.lemma_ in ("seem", "appear", "happen") and "ccomp" in deps
+
+
+_DURATIONS = frozenset("second minute hour day week month year decade century".split())
+
+
+def _takes_time_to(subj) -> bool:
+    """'It took <a length of time> to <verb>': "took three years to integrate", "took him years to recover".
+    The "it" is usually the clause, but may be the thing ("It took three years to build"), so such an "it" is
+    still resolved when nothing competes with the subject; it is only not flagged as ambiguous."""
+    verb = subj.head
+    if subj.lower_ != "it" or subj.dep_ != "nsubj" or verb.lemma_ != "take":
+        return False
+    time = next((c for c in verb.children if c.dep_ == "dobj" and c.lemma_.lower() in _DURATIONS), None)
+    return time is not None and any(
+        t.tag_ == "VB" and t.i > time.i and any(a.dep_ == "aux" and a.lower_ == "to" for a in t.children)
+        for t in verb.subtree)
 
 
 # ------------------------------------------------------------------ text helpers

@@ -167,11 +167,13 @@ class HallucinationDetector:
         if notation_note:
             reasons.append(notation_note)
         pronoun = claim.ambiguous_pronoun
-        if label == SUPPORTED and pronoun:
-            # claims.py leaves a pronoun unresolved when two people could be meant. Then the evidence may be
-            # about the other person ("She died in 1906" matched to Pierre Curie's death), so it cannot support.
+        if label == SUPPORTED and pronoun and _support_is_about_the_rival(claim, citations, cfg):
+            # claims.py leaves a pronoun unresolved when two people could be meant. Unless the supporting sentence
+            # is clearly about the remembered subject, it may be about the other one ("She died in 1906" matched to
+            # Pierre Curie's death), so it does not support the claim as the writer most likely meant it.
             label, confidence = UNSUPPORTED, 0.5
-            reasons.append(f"unresolved pronoun: cannot tell who '{pronoun}' refers to, so the evidence cannot support it")
+            reasons.append(f"unresolved pronoun: '{pronoun}' may mean {claim.pronoun_referent or 'the earlier subject'}"
+                           f" or {claim.pronoun_rival or 'someone else'}, and the supporting evidence is not clearly about the first")
         self._warn_if_sources_conflict(claim, citations, premises, warnings)
         # PLAN section 3: cite only sentences that are actually evidence. With none, the list is empty
         # and the best similarity is still given in the reasons.
@@ -361,3 +363,33 @@ def _in_names(words: list[_Word], other: frozenset[str], english: frozenset[str]
         i = max(j, i + 1)
     return named
 
+
+
+def _name_words(name: str | None) -> set[str]:
+    """The words of a name, without function words ("The Washington Post" -> {"washington", "post"})."""
+    english = _stop_words("en")
+    return {w for w in re.findall(r"[a-z]+", (name or "").lower()) if len(w) > 1 and w not in english}
+
+
+def _support_is_about_the_rival(claim: Claim, citations: list[Citation], cfg: Config) -> bool:
+    """Whether an ambiguous he / she claim may be supported by evidence about the other person.
+
+    The claim stays SUPPORTED only when the sentence that decided the support names the remembered subject
+    and not the rival. Every other case is demoted: the sentence names the rival, names both ("John Sculley,
+    whom Steve Jobs recruited, was born in 1939"), or names neither ("He was born in 1939"). Names are compared
+    by their distinctive words, so "Marie Curie" vs "Pierre Curie" turns on "marie" / "pierre".
+    "it" is not guarded: after "The FDA approved Vioxx. It was withdrawn ..." the object is usually what is
+    meant, and evidence about either candidate is accepted.
+    """
+    if claim.ambiguous_pronoun not in ("he", "she"):
+        return False
+    rival, referent = _name_words(claim.pronoun_rival), _name_words(claim.pronoun_referent)
+    rival, referent = rival - referent, referent - rival
+    # the sentence that decided the support: the first one NLI says entails the claim, else the closest one
+    deciding = next((c for c in citations if c.nli and c.nli["entailment"] >= cfg.nli_threshold
+                     and c.similarity >= cfg.related_threshold), citations[0] if citations else None)
+    if deciding is None:
+        return True
+    words = set(re.findall(r"[a-z]+", deciding.quote.lower()))
+    names_subject_only = bool(words & referent) and not (words & rival)
+    return not names_subject_only

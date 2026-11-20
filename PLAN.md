@@ -23,7 +23,7 @@ Step 5 was verified exactly: after the restructure, every one of the 50 developm
 
 ### Review and fix rounds
 
-After v2 shipped, the code was audited against this plan by six parallel reviewers. Each reported defect was reproduced, then confirmed by an independent skeptic: 56 defects across every module. Five fixers repaired them in parallel, in isolated worktrees, one module group each. A second review of the merged fixes found 23 new defects introduced by the fixes themselves, and a second round fixed those. Every fix has a regression test. The sample cases in `examples/cases/` were written during this audit; they are realistic factual and hallucinated answers with hand-assigned labels, used to find and measure false alarms.
+After v2 shipped, the code was audited against this plan by six parallel reviewers. Each reported defect was reproduced, then confirmed by an independent skeptic: 56 defects across every module. Five fixers repaired them in parallel, in isolated worktrees, one module group each. Each review of the merged fixes found fewer new defects introduced by the fixes themselves: 23, then 13, then 10, then 6. Each was fixed in another round, and from the third round on every fixer's work was reviewed and repaired inside its own worktree before merging. Every fix has a regression test (125 tests became 842). The sample cases in `examples/cases/` were written during this audit; they are realistic factual and hallucinated answers with hand-assigned labels, used to find and measure false alarms. A quadratic slowdown on long sources found during the audit was fixed; detection time is now linear in source length.
 
 The rest of this document is the plan as written before implementation.
 
