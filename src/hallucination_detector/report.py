@@ -4,11 +4,18 @@ from __future__ import annotations
 import html
 import json
 
-from .schemas import LABELS, Report
+from .schemas import LABELS, ClaimVerdict, Report
 
 COLORS = {"SUPPORTED": "#2e9e5b", "CONTRADICTED": "#d64545", "FABRICATED": "#b5459e", "UNSUPPORTED": "#d98c1f"}
 SEVERITY = {"SUPPORTED": 0, "UNSUPPORTED": 1, "FABRICATED": 2, "CONTRADICTED": 3}
 ANSI = {"SUPPORTED": "\033[32m", "CONTRADICTED": "\033[31m", "FABRICATED": "\033[35m", "UNSUPPORTED": "\033[33m"}
+
+
+def display_reasons(verdict: ClaimVerdict) -> list[str]:
+    """Reasons to show next to the evidence. The evidence line already shows the best similarity, so that
+    reason is dropped when there is a citation; an uncited claim keeps it as its only clue."""
+    shown = bool(verdict.citations) and verdict.reasons[:1] and verdict.reasons[0].startswith("best evidence")
+    return verdict.reasons[1:] if shown else list(verdict.reasons)
 
 
 def to_json(report: Report, indent: int = 2) -> str:
@@ -31,9 +38,7 @@ def to_text(report: Report, color: bool = True) -> str:
             lines.append(f"      checked as: {v.claim.resolved_text}")
         for c in v.citations[:1]:
             lines.append(f"      evidence [{c.source_id} #{c.sentence_index}] ({c.similarity:.2f}): {c.quote}")
-        # the evidence line already shows the best similarity; an uncited claim keeps it as a reason
-        shown = bool(v.citations) and v.reasons[:1] and v.reasons[0].startswith("best evidence")
-        for reason in v.reasons[1:] if shown else v.reasons:
+        for reason in display_reasons(v):
             lines.append(f"      - {reason}")
     for w in report.warnings:
         lines.append(f"warning: {w}")

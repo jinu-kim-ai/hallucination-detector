@@ -9,7 +9,8 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from hallucination_detector import Config, HallucinationDetector
-from hallucination_detector.report import to_html, to_json
+from hallucination_detector.report import display_reasons, to_html, to_json
+from hallucination_detector.schemas import ClaimVerdict
 
 st.set_page_config(page_title="Hallucination Detector", layout="wide")
 st.title("Hallucination Detector")
@@ -41,6 +42,11 @@ def input_error(response: str, sources: list[dict]) -> str | None:
     if repeated:
         return f"Each source needs a different id (used more than once: {', '.join(repeated)})."
     return None
+
+
+def why(v: ClaimVerdict) -> str:
+    """The reasons column, with the same rule as the text report (report.display_reasons)."""
+    return "; ".join(display_reasons(v))
 
 
 @st.cache_resource(show_spinner="Loading models (first run downloads about 380 MB)...")
@@ -100,7 +106,7 @@ if st.button("Check response", type="primary"):
             "#": v.claim.id, "claim": v.claim.text, "label": v.label, "confidence": v.confidence,
             "cited source": v.citations[0].source_id if v.citations else "",
             "evidence": v.citations[0].quote if v.citations else "",
-            "why": "; ".join(v.reasons[1:] or v.reasons),
+            "why": why(v),
         } for v in report.verdicts]), hide_index=True, width="stretch")
 
         st.subheader("Highlighted report")

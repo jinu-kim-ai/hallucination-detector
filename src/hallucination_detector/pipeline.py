@@ -12,6 +12,7 @@ import re
 from collections import OrderedDict
 from dataclasses import replace
 from functools import lru_cache
+from typing import NamedTuple
 
 from . import facts, scoring
 from .claims import ClaimExtractor, load_nlp
@@ -21,16 +22,19 @@ from .schemas import Citation, Claim, ClaimVerdict, Report, SourceDocument, UNSU
 from .sources import as_documents, split_sentences
 
 # Latin-script languages most often mistaken for English. spaCy ships their stop lists, so the
-# language check needs no extra model or dependency.
+# language check needs no extra model or dependency. A list of languages, not a threshold: the
+# numbers the check uses are Config fields (min_foreign_function_words, foreign_to_english_ratio).
+# With the defaults no English sentence of the dev set, the examples or the sample cases is flagged,
+# while a 6-word French or Spanish sentence is ("Marie Curie nació en Varsovia en 1867": 2 vs 0).
+# A sentence with a single such word ("... startete am 16. Juli ...") is missed.
 OTHER_LATIN_LANGUAGES = ("es", "fr", "de", "pt", "it", "nl")
-# A response is in another language when it has at least MIN_FOREIGN_FUNCTION_WORDS of that
-# language's function words (ones that are not also English) and more than FOREIGN_TO_ENGLISH_RATIO
-# times as many as English-only function words. Measured on the dev set, the examples and the sample
-# cases: no English sentence crosses it, not even name-heavy ones like "Pedro de la Rosa drove for
-# Arrows" (2 vs 2), while a 6-word French or Spanish sentence does ("Marie Curie nació en Varsovia
-# en 1867": 2 vs 0). A sentence with a single such word ("... startete am 16. Juli ...") is missed.
-MIN_FOREIGN_FUNCTION_WORDS = 2
-FOREIGN_TO_ENGLISH_RATIO = 2
+# Lower-case particles inside personal and place names ("Antoine de Saint-Exupéry", "Ludwig van Beethoven").
+NAME_PARTICLES = frozenset({"da", "das", "de", "del", "della", "den", "der", "di", "do", "dos", "du",
+                            "la", "le", "van", "von"})
+_WORD_RE = re.compile(r"[^\W\d_]+")
+_QUOTED_RE = re.compile(r"\"[^\"]*\"|“[^”]*”|«[^»]*»")
+_SENTENCE_GAP_RE = re.compile(r"[.!?][\"'”’)\]]*\s|\n")
+_NAME_GAP_RE = re.compile(r"[\s'’-]*")         # what separates the words of one name or title
 
 
 class HallucinationDetector:
@@ -60,7 +64,7 @@ class HallucinationDetector:
         index, warnings = self._index(docs)
         report = Report(response, [], docs, warnings, self.config.public())
 
-        if not _looks_english(response):
+        if not _looks_english(response, self.config):
             report.warnings.append("response does not look like English text; these models are English-only")
             report.unscorable = True
             return report
@@ -132,7 +136,7 @@ class HallucinationDetector:
         # Only evidence about the *same* fact can contradict; weakly related text cannot.
         conflicts = (facts.conflicts(self.nlp, text, claim_facts, [c.quote for c in related], index.text_lower)
                      if best_sim >= cfg.contradiction_threshold else [])
-        novel = facts.novel(claim_facts, index.text_lower)
+        novel = facts.novel(claim_facts, index.text)    # cased: a K/M/B suffix is only read as a scale in capitals
 
         if self.nli is not None:
             # v1 read only the best sentence; v2 also reads the other related ones
@@ -147,9 +151,15 @@ class HallucinationDetector:
         notation_note = None
         if (nli and nli["contradiction"] >= cfg.nli_threshold and not conflicts
                 and facts.same_values_other_notation(text, citations[0].quote)):
-            # the numbers agree in value and only their writing differs: NLI alone must not call that a contradiction
-            nli = {**nli, "contradiction": 0.0}
-            notation_note = "NLI contradiction ignored: the numbers match the evidence, written differently"
+            # NLI reads '$2.1 billion' vs '$2,100 million' as a contradiction. Score the same pair again with
+            # both texts in one notation: only a contradiction that then disappears was about the notation;
+            # one about a name or a reversed meaning ('cut' vs 'added') stays.
+            premise = " ".join(s.text for s in index.neighbors(hits[0][0], cfg.nli_context_sentences))
+            rescored = self.nli.score([(facts.canonical_numbers(premise), facts.canonical_numbers(text))])[0]
+            citations[0].nli = rescored
+            nli = scoring.decisive_nli(citations, cfg)
+            if rescored["contradiction"] < cfg.nli_threshold:
+                notation_note = "NLI contradiction ignored: the numbers match the evidence, written differently"
 
         label, confidence, reasons = scoring.decide(best_sim, conflicts, novel, nli, cfg)
         if notation_note:
@@ -170,7 +180,9 @@ class HallucinationDetector:
         def stance(c: Citation) -> str | None:
             if c.nli and c.nli["entailment"] >= cfg.nli_threshold:
                 return "supports"
-            if c.nli and c.nli["contradiction"] >= cfg.nli_threshold:
+            # as in _check, NLI reads '1,200,000' against '1.2 million' as a contradiction; the numbers decide that
+            if (c.nli and c.nli["contradiction"] >= cfg.nli_threshold
+                    and not facts.same_values_other_notation(claim.resolved_text, c.quote)):
                 return "contradicts"
             # NLI neutral or off: fall back to the claim's numbers, kept even when NLI is neutral
             # because the NLI model misses some number conflicts
@@ -200,11 +212,19 @@ class HallucinationDetector:
                     return
 
 
+# A scale word right after a numeral ('1.2 million'), which belongs to the number, or any other word.
+_SCALED_DIGIT_OR_WORD_RE = re.compile(r"\d\s?(?:thousand|million|billion|trillion)\b|[A-Za-z]+", re.IGNORECASE)
+
+
 def _digit_numbers(text: str) -> set[float]:
-    """Numbers written with digits. Number words ('two Canadian researchers') are too often incidental
-    to stand in for a claimed value, so they are left out."""
-    no_words = re.sub(r"[A-Za-z]+", lambda m: " " if m.group().lower() in facts.WORD_NUMBERS else m.group(), text)
-    return facts.numbers(no_words)
+    """Numbers written with digits, with their scale ('$4.5 billion' is 4.5e9). Number words on their own
+    ('two Canadian researchers', 'two thousand') are too often incidental to stand in for a claimed value,
+    so they are left out."""
+    def mask(m: re.Match) -> str:
+        word = m.group()
+        return " " if not word[0].isdigit() and word.lower() in facts.WORD_NUMBERS else word
+
+    return facts.numbers(_SCALED_DIGIT_OR_WORD_RE.sub(mask, text))
 
 
 def _number_kind(n: float) -> str:
@@ -219,17 +239,20 @@ def _rival_numbers(claim_nums: set[float], quote: str) -> set[float]:
     return {m for m in quote_nums if _number_kind(m) in missing_kinds and not facts.has_number(claim_nums, m)}
 
 
-def _looks_english(text: str) -> bool:
-    return _mostly_latin(text) and not _other_latin_language(text)
+_DEFAULT_CONFIG = Config()
 
 
-def _mostly_latin(text: str) -> bool:
+def _looks_english(text: str, config: Config = _DEFAULT_CONFIG) -> bool:
+    return _mostly_latin(text, config) and not _other_latin_language(text, config)
+
+
+def _mostly_latin(text: str, config: Config) -> bool:
     letters = re.findall(r"[^\W\d_]", text)
     non_ascii = sum(not ch.isascii() for ch in letters)
     # a few accented letters are normal in English ("Pelé", "Müller"); short Korean text is not
-    if non_ascii < 3:
+    if non_ascii < config.min_non_ascii_letters:
         return True
-    return (len(letters) - non_ascii) / len(letters) >= 0.7
+    return (len(letters) - non_ascii) / len(letters) >= config.min_ascii_letter_ratio
 
 
 @lru_cache(maxsize=None)
@@ -237,14 +260,68 @@ def _stop_words(lang: str) -> frozenset[str]:
     return frozenset(importlib.import_module(f"spacy.lang.{lang}.stop_words").STOP_WORDS)
 
 
-def _other_latin_language(text: str) -> bool:
-    """French, Spanish, German... text: many of that language's function words, few English-only ones."""
-    words = [w.lower() for w in re.findall(r"[^\W\d_]+", text)]
+def _other_latin_language(text: str, config: Config) -> bool:
+    """French, Spanish, German... text: many of that language's function words, few English-only ones.
+
+    Function words inside names and titles do not count: an English answer about "Le Petit Prince" or
+    "El amor en los tiempos del cólera" is still written in English.
+    """
+    words = _words(text)
     english = _stop_words("en")
     for lang in OTHER_LATIN_LANGUAGES:
         other = _stop_words(lang)
-        foreign_only = sum(w in other and w not in english for w in words)
-        english_only = sum(w in english and w not in other for w in words)
-        if foreign_only >= MIN_FOREIGN_FUNCTION_WORDS and foreign_only > FOREIGN_TO_ENGLISH_RATIO * english_only:
+        named = _in_names(words, other, english)
+        foreign_only = sum(w.lower in other and w.lower not in english and not n for w, n in zip(words, named))
+        english_only = sum(w.lower in english and w.lower not in other for w in words)
+        if (foreign_only >= config.min_foreign_function_words
+                and foreign_only > config.foreign_to_english_ratio * english_only):
             return True
     return False
+
+
+class _Word(NamedTuple):
+    lower: str
+    capitalized: bool
+    initial: bool           # first word of a sentence, where any word is capitalized
+    joined: bool            # only spaces, hyphens or apostrophes separate it from the word before
+
+
+def _words(text: str) -> list[_Word]:
+    text = _QUOTED_RE.sub(",", text)               # a quoted title is not the language of the answer
+    out, prev_end = [], None
+    for m in _WORD_RE.finditer(text):
+        gap = text[prev_end or 0:m.start()]
+        out.append(_Word(m.group().lower(), m.group()[0].isupper(),
+                         prev_end is None or bool(_SENTENCE_GAP_RE.search(gap)),
+                         prev_end is not None and bool(_NAME_GAP_RE.fullmatch(gap))))
+        prev_end = m.end()
+    return out
+
+
+def _in_names(words: list[_Word], other: frozenset[str], english: frozenset[str]) -> list[bool]:
+    """Which words belong to a title ('wrote Le Petit Prince') or a name ('Pedro de la Rosa')."""
+    named = [False] * len(words)
+    english_only = [w.lower in english and w.lower not in other for w in words]
+    i = 0
+    while i < len(words):
+        w = words[i]
+        # A foreign article capitalized inside a sentence starts a title. German capitalizes nouns but
+        # not articles, so 'Die Astronauten sammelten etwa ...' still counts. The title runs to the next
+        # punctuation, number or English function word: 'wrote El amor en los tiempos del cólera.'
+        if w.capitalized and not w.initial and w.lower in other and w.lower not in english:
+            j = i + 1
+            while j < len(words) and words[j].joined and not english_only[j]:
+                j += 1
+            named[i:j] = [True] * (j - i)
+            i = j
+            continue
+        # name particles between two capitalized words
+        j = i
+        while j < len(words) and not words[j].capitalized and words[j].lower in NAME_PARTICLES \
+                and (j == i or words[j].joined):
+            j += 1
+        if j > i and i > 0 and words[i - 1].capitalized and words[i].joined \
+                and j < len(words) and words[j].capitalized and words[j].joined:
+            named[i:j] = [True] * (j - i)
+        i = max(j, i + 1)
+    return named

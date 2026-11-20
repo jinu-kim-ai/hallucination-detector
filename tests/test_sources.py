@@ -82,6 +82,20 @@ def test_none_source_is_blank_not_the_word_none():
     assert as_documents([None, {"id": "b", "text": None}]) == [SourceDocument("source-1", ""), SourceDocument("b", "")]
 
 
+def test_source_documents_get_the_same_normalization_as_dicts():
+    assert as_documents([SourceDocument("s", None)]) == [SourceDocument("s", "")]
+    assert [d.id for d in as_documents([SourceDocument("", "a"), {"text": "b"}])] == ["source-1", "source-2"]
+    assert [d.id for d in as_documents([SourceDocument("", "a"), SourceDocument("", "b")])] == ["source-1", "source-2"]
+    with pytest.raises(ValueError, match="must be a string"):
+        as_documents([SourceDocument("s", "x", 5)])
+
+
+def test_source_document_with_no_text_does_not_crash_detect(detector_no_nli):
+    report = detector_no_nli.detect("Marie Curie was born in Warsaw in 1867.", [SourceDocument("s", None)])
+    assert report.sources == [SourceDocument("s", "")]
+    assert any("no source text" in w for w in report.warnings)
+
+
 @pytest.mark.parametrize("payload, message", [
     ("my response text", "JSON object"),
     (["response"], "JSON object"),

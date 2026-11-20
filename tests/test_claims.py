@@ -1,6 +1,6 @@
 import pytest
 
-from hallucination_detector import ClaimExtractor
+from hallucination_detector import CONTRADICTED, SUPPORTED, ClaimExtractor
 
 
 @pytest.fixture(scope="module")
@@ -145,9 +145,53 @@ def test_short_clause_with_its_own_subject_is_kept(extract):
      ["You can begin the return online.", "You can get a free label."]),
     ("The company was founded in 1999 and went public in 2005.",       # no shared auxiliary: different tense
      ["The company was founded in 1999.", "The company went public in 2005."]),
+    ("The paper was submitted in March and accepted in July.",         # tagged VBD, but a participle
+     ["The paper was submitted in March.", "The paper was accepted in July."]),
+    # A past tense that rarely takes an object is not a participle: no "was died".
+    ("Albert Einstein was born in Ulm in 1879 and died in Princeton in 1955.",
+     ["Albert Einstein was born in Ulm in 1879.", "Albert Einstein died in Princeton in 1955."]),
+    ("She was elected in 2008 and retired in 2016.", ["She was elected in 2008.", "She retired in 2016."]),
+    ("The rover was launched in 2020 and landed on Mars in 2021.",
+     ["The rover was launched in 2020.", "The rover landed on Mars in 2021."]),
+    ("The species was discovered in 1902 and survived until 1936.",
+     ["The species was discovered in 1902.", "The species survived until 1936."]),
+    ("The patient was admitted on Monday and improved over the week.",
+     ["The patient was admitted on Monday.", "The patient improved over the week."]),
+    ("The company was founded in 1998 and expanded rapidly in Asia.",
+     ["The company was founded in 1998.", "The company expanded rapidly in Asia."]),
 ])
 def test_coordinated_verb_shares_the_auxiliary(extract, response, expected):
     assert texts(extract(response)) == expected
+
+
+@pytest.mark.parametrize("response, expected", [
+    ("The company did not raise prices or cut jobs in 2023.",
+     ["The company did not raise prices.", "The company did not cut jobs in 2023."]),
+    ("Patients should not drive or operate machinery.", ["Patients should not drive.", "Patients should not operate machinery."]),
+    ("The bridge will not be repaired or replaced until 2030.",
+     ["The bridge will not be repaired.", "The bridge will not be replaced until 2030."]),
+    ("The vaccine was never licensed or sold in Europe.",
+     ["The vaccine was never licensed.", "The vaccine was never sold in Europe."]),
+    ("Sales shouldn't be delayed or cancelled.", ["Sales shouldn't be delayed.", "Sales shouldn't be cancelled."]),
+    ("The museum can't be visited or photographed on Mondays.",
+     ["The museum can't be visited.", "The museum can't be photographed on Mondays."]),
+    ("The plant won't be expanded or sold.", ["The plant won't be expanded.", "The plant won't be sold."]),
+    ("The company did not raise prices nor cut jobs.", ["The company did not raise prices.", "The company did not cut jobs."]),
+    ("The company never raised prices or cut jobs.", ["The company never raised prices.", "The company never cut jobs."]),
+])
+def test_negation_shared_through_or_goes_with_every_piece(extract, response, expected):
+    # "not A or B" means neither happened, so each piece keeps the negation (and a contraction stays whole).
+    assert texts(extract(response)) == expected
+
+
+@pytest.mark.parametrize("response", [
+    "The company did not raise prices and cut jobs in 2023.",       # may mean the jobs were cut
+    "People with type 1 diabetes do not produce enough insulin and require insulin therapy.",   # does mean it
+    "The company did not raise prices but cut jobs.",
+    "The company neither raised prices nor cut jobs.",
+])
+def test_negated_coordination_with_unclear_scope_stays_whole(extract, response):
+    assert texts(extract(response)) == [response]
 
 
 def test_words_after_the_and_belong_to_the_second_clause(extract):
@@ -200,6 +244,55 @@ def test_object_relative_clause_is_split(extract):
         "He wrote a novel.", "Critics praised a novel in 1990."]
 
 
+@pytest.mark.parametrize("response, expected", [
+    ("The report, which the agency plans to release in May, covers 2023.",
+     ["The report covers 2023.", "The agency plans to release the report in May."]),
+    ("The vaccine, which the company hopes to sell in Europe, costs $20.",
+     ["The vaccine costs $20.", "The company hopes to sell the vaccine in Europe."]),
+    ("The board approved the merger, which the regulators signed off on in March.",
+     ["The board approved the merger.", "The regulators signed off on the merger in March."]),
+    ("The telescope, which NASA launched in 2021, cost $10 billion.",
+     ["The telescope cost $10 billion.", "NASA launched the telescope in 2021."]),
+    # "which" is the subject of an inner clause: no grammatical rewrite, so the sentence stays whole.
+    ("The drug, which experts believe is safe, was approved in 2019.",
+     ["The drug, which experts believe is safe, was approved in 2019."]),
+])
+def test_object_relative_goes_back_where_it_was_taken_from(extract, response, expected):
+    assert texts(extract(response)) == expected
+
+
+@pytest.mark.parametrize("response, described", [
+    ("Paris is the capital of France, which has a population of about 68 million.",
+     "France has a population of about 68 million."),
+    ("He visited the museum of Paris, which is the capital of France.", "Paris is the capital of France."),
+    ("The CEO of Acme, who joined in 2010, resigned in 2020.", "The CEO of Acme joined in 2010."),
+    ("The University of Oxford, which was founded in 1096, is in England.",
+     "The University of Oxford was founded in 1096."),
+    ("He admired the works of Picasso, who was born in Malaga.", "Picasso was born in Malaga."),
+    ("The price of oil, which rose 5 percent, hit a record.", "The price of oil rose 5 percent."),
+])
+def test_relative_clause_after_of_describes_the_right_noun(extract, response, described):
+    assert texts(extract(response))[-1] == described
+
+
+def test_clause_level_which_is_checked_with_the_clause_it_describes(extract):
+    response = "Revenue rose 10% in 2023, which beat expectations. Operating costs rose 30% in 2023, which beat expectations."
+    claims = extract(response)
+    assert texts(claims) == ["Revenue rose 10% in 2023.", "This beat expectations.",
+                             "Operating costs rose 30% in 2023.", "This beat expectations."]
+    assert [c.resolved_text for c in claims[1::2]] == ["Revenue rose 10% in 2023, which beat expectations.",
+                                                       "Operating costs rose 30% in 2023, which beat expectations."]
+    assert [c.duplicate_of for c in claims] == [None, None, None, None]     # different facts, not duplicates
+
+
+def test_false_clause_level_which_is_contradicted(detector):
+    report = detector.detect(
+        "Revenue rose 10% in 2023, which beat expectations. Operating costs rose 30% in 2023, which beat expectations.",
+        "Revenue rose 10% in 2023, which beat analyst expectations. Operating costs rose 30% in 2023, far above the "
+        "12% analysts had forecast, which missed expectations.")
+    assert [v.label for v in report.verdicts] == [SUPPORTED, SUPPORTED, SUPPORTED, CONTRADICTED]
+
+
 # ------------------------------------------------------------------ pronouns
 @pytest.mark.parametrize("response, checked_as", [
     ("Marie Curie was born in Warsaw, and she died in 1934.", "Marie Curie died in 1934."),
@@ -209,6 +302,25 @@ def test_object_relative_clause_is_split(extract):
 ])
 def test_pronoun_is_resolved_by_a_subject_in_the_same_sentence(extract, response, checked_as):
     assert extract(response)[-1].resolved_text == checked_as
+
+
+@pytest.mark.parametrize("response", [
+    "The FDA approved Zestril in 2019, and it became the best-selling blood pressure drug in 2021.",
+    "Marie Curie married Pierre Curie in 1895, and he died in 1906.",
+    "The FDA approved Zestril in 2019. It became the best-selling blood pressure drug in 2021.",
+    "Marie Curie married Pierre Curie in 1895. He died in 1906.",
+    "Apple acquired Beats in 2014, and it was founded in 2006.",
+])
+def test_pronoun_that_could_mean_a_named_object_is_left_alone(extract, response):
+    claim = extract(response)[-1]
+    assert claim.resolved_text == claim.text      # guessing the subject would check a different fact
+
+
+def test_named_object_does_not_block_a_pronoun_before_it_or_a_newer_subject(extract):
+    assert extract("Marie Curie was born in Warsaw. She married Pierre Curie in 1895.")[-1].resolved_text == \
+        "Marie Curie married Pierre Curie in 1895."
+    assert extract("The FDA approved Zestril in 2019. Zestril sold well, and it became popular.")[-1].resolved_text == \
+        "Zestril became popular."
 
 
 @pytest.mark.parametrize("second", ["It is estimated that Amazon has 1.5 million employees.",

@@ -77,3 +77,12 @@ def test_cli_detect_from_text_files(tmp_path, capsys):
                  "--source", str(tmp_path / "source.txt")]) == 0
     out = capsys.readouterr().out
     assert "CONTRADICTED" in out and "[source.txt #0]" in out
+
+
+def test_threshold_sweep_skips_values_below_the_related_threshold(nlp):
+    from hallucination_detector import HallucinationDetector
+    detector = HallucinationDetector(nlp=nlp, use_nli=False, embedder="hashing", related_threshold=0.5)
+    sources, rows = load_dataset(DATA)
+    results = sweep_thresholds(detector, sources, rows[:4])
+    assert results and min(r["support_threshold"] for r in results) >= 0.5
+    assert detector.config.related_threshold == 0.5 and detector.config.support_threshold == 0.65

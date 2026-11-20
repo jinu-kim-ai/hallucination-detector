@@ -53,6 +53,7 @@ class SourceIndex:
     sentences: list[Sentence]      # every sentence of every document, in order
     matrix: np.ndarray             # one normalized embedding row per sentence
     text_lower: str                # all source text, lower-cased (for "does this name appear anywhere" checks)
+    text: str = ""                 # the same text with its case: '5M users' and '5m tall' differ only by case
 
     def neighbors(self, i: int, radius: int) -> list[Sentence]:
         """Sentence i with up to `radius` sentences on each side, from the same document."""
@@ -78,7 +79,8 @@ class Retriever:
             sentences.extend(sents)
             blocks.append(self._embeddings(sents))
         matrix = np.vstack(blocks) if blocks else np.zeros((0, 1), dtype=np.float32)
-        return SourceIndex(sentences, matrix, "\n".join(texts).lower())
+        joined = "\n".join(texts)
+        return SourceIndex(sentences, matrix, joined.lower(), joined)
 
     def _embeddings(self, sents: list[Sentence]) -> np.ndarray:
         texts = [s.text for s in sents]

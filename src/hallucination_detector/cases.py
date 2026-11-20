@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .schemas import HALLUCINATION_LABELS, LABELS, ClaimVerdict, Report
-from .sources import as_documents
+from .sources import as_documents, read_text
 
 REQUIRED_KEYS = {"name", "domain", "question", "description", "response", "sources", "expected"}
 
@@ -72,18 +72,41 @@ class CaseResult:
 
 
 def load_case(path: str | Path) -> Case:
+    """Read and check one case file. Every problem is a ValueError naming the file (one CLI line)."""
     path = Path(path)
-    data = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        data = json.loads(read_text(path))      # utf-8-sig, like every other input: Notepad writes a BOM
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        raise ValueError(f"{path}: {e}") from e
+    if not isinstance(data, dict):
+        raise ValueError(f"{path}: a case file must be a JSON object, got {type(data).__name__}")
     missing = REQUIRED_KEYS - set(data)
     if missing:
         raise ValueError(f"{path}: missing keys {sorted(missing)}")
+    if not isinstance(data["response"], str):
+        raise ValueError(f"{path}: 'response' must be a string")
+    if not isinstance(data["expected"], list) or not data["expected"]:
+        raise ValueError(f"{path}: 'expected' must be a non-empty list")
     for e in data["expected"]:
-        if e.get("label") not in LABELS:
-            raise ValueError(f"{path}: unknown label {e.get('label')!r} for claim {e.get('claim')!r}")
-        if e.get("claim") not in data["response"]:
-            raise ValueError(f"{path}: expected claim is not verbatim text from the response: {e.get('claim')!r}")
-    as_documents(data["sources"])                  # validates ids
+        _check_expected(path, e, data["response"])
+    try:
+        as_documents(data["sources"])               # validates ids and text fields
+    except (TypeError, ValueError) as e:
+        raise ValueError(f"{path}: invalid sources ({e})") from e
     return Case(path, **{k: data[k] for k in REQUIRED_KEYS})
+
+
+def _check_expected(path: Path, entry, response: str) -> None:
+    if not isinstance(entry, dict):
+        raise ValueError(f"{path}: each expected entry must be an object, got {entry!r}")
+    claim = entry.get("claim")
+    if not isinstance(claim, str) or not claim.strip():
+        # an empty claim is "in" every response and would match nothing
+        raise ValueError(f"{path}: expected entry needs a non-empty 'claim' string, got {claim!r}")
+    if entry.get("label") not in LABELS:
+        raise ValueError(f"{path}: unknown label {entry.get('label')!r} for claim {claim!r}")
+    if claim not in response:
+        raise ValueError(f"{path}: expected claim is not verbatim text from the response: {claim!r}")
 
 
 def load_cases(directory: str | Path) -> list[Case]:

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import math
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 # Entity types that carry checkable facts. CARDINAL / PERCENT / MONEY are handled as numbers.
 FACT_ENTITY_LABELS = {"PERSON", "ORG", "GPE", "LOC", "DATE", "NORP", "FAC", "EVENT", "PRODUCT", "WORK_OF_ART", "LAW"}
@@ -27,6 +27,24 @@ WORD_NUMBERS = {
     "tenth": 10, "eleventh": 11, "twelfth": 12, "thirteenth": 13, "fourteenth": 14, "fifteenth": 15,
     "sixteenth": 16, "seventeenth": 17, "eighteenth": 18, "nineteenth": 19, "twentieth": 20,
 }
+# Ordinals name a rank or position ('the first person', 'First, ...', 'the second largest'), not an amount.
+_ORDINAL_WORDS = {"first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth",
+                  "eleventh", "twelfth", "thirteenth", "fourteenth", "fifteenth", "sixteenth", "seventeenth",
+                  "eighteenth", "nineteenth", "twentieth"}
+# Kinds that say exactly what a number is; such a number never stands in for an unlabelled one.
+_STRONG_KINDS = {"money", "%", "time", "calendar year", "day"}
+# Nouns that all count people: '300 workers' and '1,500 people' state the same fact.
+_PERSON_NOUNS = {"people", "person", "employee", "worker", "staff", "staffer", "personnel", "member", "individual"}
+# A preposition before a 4-digit number makes it a year even when a noun follows ('in 1998 workers ...').
+_YEAR_PREPS = {"in", "by", "since", "from", "until", "till", "during", "of", "before", "after", "circa"}
+# Words just before a number (or just after it) that phrase it as a fall: 'fell 3.2%' is the source's '-3.2%'.
+_DECREASE_BEFORE_RE = re.compile(
+    r"\b(?:fell|falls?|falling|declined|declines?|declining|decreased|decreases?|decreasing|dropped|drops?|"
+    r"dropping|down|lost|loses?|losing|shrank|shrunk|shrinks?|shrinking|slipped|slips?|slipping|contracted|"
+    r"contracts?|contracting|slid|slides?|sliding|an? (?:decline|decrease|drop|fall|loss|reduction|contraction) of)"
+    r"(?: by)? $")
+_DECREASE_AFTER_RE = re.compile(r"(?: ?%| percent| per cent)?[ -](?:decline|decrease|drop|fall|loss|reduction|"
+                                r"contraction)\b")
 # A numeral with an optional sign, currency, decimal part and scale: '-40', '$1,234.56', '$1.6 billion', '1.2M'.
 # The sign only counts when nothing word-like is glued to its left, so '1990-1995' and 'COVID-19' stay positive.
 # Lower-case k/m/b only scale after a currency sign, so '5 m' (meters) is not 5 million.
@@ -34,7 +52,7 @@ _NUM_RE = re.compile(
     r"(?<![\w.])(?P<sign>-)?(?P<cur>[$\u20ac\u00a3])?(?P<num>(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)"
     r"(?:\s?(?P<scale>(?i:thousand|million|billion|trillion))\b"
     r"|(?P<abbr>(?(cur)(?i:bn|k|m|b)|(?:bn|K|M|B)))\b"
-    r"|(?:st|nd|rd|th)\b)?")
+    r"|(?P<ord>st|nd|rd|th)\b)?")
 _TRANS = str.maketrans({"\u2018": "'", "\u2019": "'", "\u02bc": "'", "\u201c": '"', "\u201d": '"',
                         "\u2013": "-", "\u2014": "-", "\u2212": "-", "\u00a0": " "})
 # Words after a number that say nothing about what it counts ("18 to 24", "in 1969 the").
@@ -52,6 +70,19 @@ _WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday",
 _CALENDAR = {**{m: i for i, m in enumerate(_MONTHS)}, **{m[:3]: i for i, m in enumerate(_MONTHS)}, "sept": 8,
              **{d: 12 + i for i, d in enumerate(_WEEKDAYS)}}
 _CALENDAR_RE = re.compile(r"\b(" + "|".join(sorted(_CALENDAR, key=len, reverse=True)) + r")\b")
+# Month names that are also ordinary words ('which may cause', 'protesters march'): in a source they only
+# count as a month next to a number or after a word that introduces a date.
+_AMBIGUOUS_MONTHS = {"may", "march", "mar"}
+_MONTH_NAMES = "|".join(sorted({k for k, v in _CALENDAR.items() if v < 12}, key=len, reverse=True))
+_PLAIN_MONTH_NAMES = "|".join(sorted({k for k, v in _CALENDAR.items() if v < 12} - _AMBIGUOUS_MONTHS,
+                                     key=len, reverse=True))
+# A day number right before a month: '4 November', 'the 5th of May', '5 May 2019' (not '65 may experience').
+_DAY_BEFORE_MONTH_RE = re.compile(rf",? (?:of (?:{_MONTH_NAMES})|(?:{_PLAIN_MONTH_NAMES})|(?:may|march|mar)(?=,? \d))\b")
+_MONTH_BEFORE_RE = re.compile(r"(?:\d(?:st|nd|rd|th)?,? (?:of )?|\b(?:in|early|late|mid|of|since|until|during|by)[ -])$")
+_MONTH_AFTER_RE = re.compile(r"\.?,? (?:the )?\d")
+# Dates written with numbers only: '2019-11-04', '2019/11/04', '03/15/2022' (either day/month order).
+_ISO_DATE_RE = re.compile(r"\b(\d{4})[-/](\d{1,2})[-/](\d{1,2})\b")
+_SLASH_DATE_RE = re.compile(r"\b(\d{1,2})/(\d{1,2})/(\d{4})\b")
 # Leading job titles and honorifics before a person's name: 'CFO Desmond Okafor', 'Dr. Halvora Brenquist'.
 _ROLE = r"chief(?: [a-z]+){1,2} officer|c[a-z]o|(?:vice )?president|chair(?:man|woman|person)?"
 _HONORIFIC = r"dr|mr|mrs|ms|miss|prof|professor|sir|dame|lord|lady|rev|sen|senator|gov|governor|judge"
@@ -65,14 +96,17 @@ _ROLE_ABBR = {"ceo": "chief executive officer", "cfo": "chief financial officer"
 
 @dataclass
 class Facts:
-    numbers: set[float]
+    numbers: set[float]                 # amounts, dates and labels the sources must contain (ordinals left out)
     entities: list[tuple[str, str]]     # (text, spaCy label)
+    decreasing: set[float] = field(default_factory=set)     # numbers phrased as a fall: 'fell 3.2%' -> 3.2
 
 
 @dataclass(frozen=True)
 class Quantity:
     value: float
     kinds: frozenset[str]     # what the number counts: '%', 'money', 'calendar year', 'kilogram', ... (empty if unknown)
+    ordinal: bool = False     # a rank or position ('third', '3rd'): compared only with other ordinals
+    decrease: bool = False    # phrased as a fall ('fell 3.2%'), so it also stands for -3.2
 
 
 def fold(text: str) -> str:
@@ -85,16 +119,26 @@ def numbers(text: str) -> set[float]:
     return {q.value for q in quantities(text)}
 
 
+def plain_numbers(text: str) -> set[float]:
+    """numbers() without ordinals: 'First, ...' or 'the second largest' states no amount to verify."""
+    return {q.value for q in quantities(text) if not q.ordinal}
+
+
 def quantities(text: str) -> list[Quantity]:
     """Every number in the text with what it counts."""
+    return [q for _, _, q in _scan(text)[1]]
+
+
+def _scan(text: str) -> tuple[str, list[tuple[int, int, Quantity]]]:
+    """The whitespace-normalized text and every number in it as (start, end, quantity)."""
     t = re.sub(r"\s+", " ", text.translate(_TRANS))
     low = t.lower()
     out, masked = [], list(low)
     for m in _NUM_RE.finditer(t):
-        out.append(_numeral(m, t, low))
+        out.append((m.start(), m.end(), _numeral(m, t, low)))
         masked[m.start():m.end()] = " " * (m.end() - m.start())     # 'million' in '$2 million' is not read again
     out += _word_quantities(t, low, "".join(masked))
-    return out
+    return t, out
 
 
 def _numeral(m: re.Match, t: str, low: str) -> Quantity:
@@ -105,11 +149,13 @@ def _numeral(m: re.Match, t: str, low: str) -> Quantity:
     if m["sign"]:
         value = -value
     is_year = re.fullmatch(r"\d{4}", m["num"]) is not None and 1000 <= value <= 2100 and not (scale or m["sign"])
-    return Quantity(value, _kinds(t, low, m.start(), m.end(), bool(m["cur"]), is_year))
+    kinds = _kinds(t, low, m.start(), m.end(), bool(m["cur"]), is_year)
+    # 'July 20th' is a day of the month, not a rank
+    return Quantity(value, kinds, bool(m["ord"]) and "day" not in kinds, _is_decrease(low, m.start(), m.end()))
 
 
-def _word_quantities(t: str, low: str, masked: str) -> list[Quantity]:
-    """Number words: 'two' -> 2, 'seventy-five' -> 75, 'third' -> 3, 'two hundred' -> 200."""
+def _word_quantities(t: str, low: str, masked: str) -> list[tuple[int, int, Quantity]]:
+    """Number words: 'two' -> 2, 'seventy-five' -> 75, 'third' -> 3, 'one hundred and twenty' -> 120."""
     words = list(re.finditer(r"[a-z]+", masked))
     out, i = [], 0
     while i < len(words):
@@ -117,13 +163,65 @@ def _word_quantities(t: str, low: str, masked: str) -> list[Quantity]:
         if value is None:
             i += 1
             continue
-        while j < len(words) and words[j].group() in WORD_NUMBERS and _SCALES.get(words[j].group(), 0) >= 100 \
-                and masked[words[j - 1].end():words[j].start()] == " ":
-            value *= _SCALES[words[j].group()]
-            j += 1
-        out.append(Quantity(value, _kinds(t, low, words[i].start(), words[j - 1].end(), False, False)))
+        value, j = _compound(words, j, masked, value)
+        start, end = words[i].start(), words[j - 1].end()
+        kinds = _kinds(t, low, start, end, False, False)
+        ordinal = words[j - 1].group() in _ORDINAL_WORDS and "day" not in kinds
+        out.append((start, end, Quantity(value, kinds, ordinal, _is_decrease(low, start, end))))
         i = j
     return out
+
+
+def _joined(words: list[re.Match], j: int, masked: str) -> bool:
+    """Word j exists and follows word j-1 after a single space."""
+    return 0 < j < len(words) and masked[words[j - 1].end():words[j].start()] == " "
+
+
+def _scale_at(words: list[re.Match], j: int, masked: str) -> float:
+    """The value of a scale word ('hundred', 'million') at j that joins the words before it, else 0."""
+    if not _joined(words, j, masked) or words[j].group() not in WORD_NUMBERS:
+        return 0
+    return _SCALES.get(words[j].group(), 0)
+
+
+def _compound(words: list[re.Match], j: int, masked: str, current: float) -> tuple[float, int]:
+    """Extend the number word before j with scales and the groups between them.
+
+    'one hundred and twenty' -> 120, 'one thousand nine hundred' -> 1900, 'two million three hundred
+    thousand' -> 2.3e6. 'between one hundred and two hundred' stays two numbers.
+    """
+    total = 0.0
+    while scale := _scale_at(words, j, masked):
+        if not 0 < current < scale:
+            break
+        if scale == 100:
+            current *= 100
+        else:
+            total, current = total + current * scale, 0.0
+        j += 1
+        group, j = _group_after_scale(words, j, masked, scale)
+        current += group
+    return total + current, j
+
+
+def _group_after_scale(words: list[re.Match], j: int, masked: str, scale: float) -> tuple[float, int]:
+    """The tens/units group after a scale word: 'hundred [and] twenty', 'thousand nine (hundred)'."""
+    k = j + 1 if _joined(words, j, masked) and words[j].group() == "and" else j
+    if not _joined(words, k, masked) or _scale_at(words, k, masked):
+        return 0.0, j
+    value, end = _word_value(words, k, masked)
+    if value is None or value >= 100 or value != int(value):
+        return 0.0, j
+    next_scale = _scale_at(words, end, masked)
+    if k > j:       # after 'and': 'and twenty' joins, 'and two hundred' starts a new number
+        take = next_scale < 100
+    else:           # 'hundred twenty'; after a larger scale only a group with its own smaller scale
+        take = scale == 100 or 0 < next_scale < scale
+    return (value, end) if take else (0.0, j)
+
+
+def _is_decrease(low: str, start: int, end: int) -> bool:
+    return bool(_DECREASE_BEFORE_RE.search(low[max(0, start - 30):start]) or _DECREASE_AFTER_RE.match(low, end))
 
 
 def _word_value(words: list[re.Match], i: int, masked: str) -> tuple[float | None, int]:
@@ -152,13 +250,16 @@ def _kinds(t: str, low: str, start: int, end: int, money: bool, is_year: bool) -
         return frozenset({"%"})
     if re.match(r":\d", rest) or re.search(r"\d:$", low[:start]):
         return frozenset({"time"})
-    if is_year:
-        return frozenset({"calendar year"})     # not the "year" of "12-year-old"
-    kinds = set()
+    if _DAY_BEFORE_MONTH_RE.match(rest):
+        return frozenset({"day"})                               # '4 November', 'the 5th of May'
     nxt = re.match(r"[ -]+([a-z]+)", rest)
-    if nxt and nxt.group(1) not in _STOP:
-        kinds.add(_singular(nxt.group(1)))
+    noun = _singular(nxt.group(1)) if nxt and nxt.group(1) not in _STOP else None
     prev = re.search(r"([A-Za-z]+)[ -]*$", t[:start])
+    if is_year:
+        # not the "year" of "12-year-old". '1800 workers' may be a count, but 'in 1998 workers' is a year.
+        dated = not noun or (prev is not None and prev.group(1).lower() in _YEAR_PREPS)
+        return frozenset({"calendar year"} if dated else {"calendar year", noun})
+    kinds = {noun} if noun else set()
     if prev:
         word = prev.group(1).lower()
         if word in _CALENDAR and _CALENDAR[word] < 12:
@@ -169,11 +270,12 @@ def _kinds(t: str, low: str, start: int, end: int, money: bool, is_year: bool) -
 
 
 def _singular(word: str) -> str:
+    """The noun's singular, with every word for counted people as 'person'."""
     if word.endswith("ies") and len(word) > 4:
-        return word[:-3] + "y"
-    if word.endswith("s") and not word.endswith("ss") and len(word) > 3:
-        return word[:-1]
-    return word
+        word = word[:-3] + "y"
+    elif word.endswith("s") and not word.endswith("ss") and len(word) > 3:
+        word = word[:-1]
+    return "person" if word in _PERSON_NOUNS else word
 
 
 def has_number(pool: set[float], n: float) -> bool:
@@ -200,10 +302,12 @@ def norm_entity(ent: str) -> str:
 def mentioned(ent: str, text: str) -> bool:
     """`ent` appears in the (folded) text as whole words: 'Ian Smith' is not in 'Brian Smithson'.
 
-    A possessive or demonym ending still counts: 'Europe' is grounded by 'European sales'.
+    A possessive, plural or demonym ending still counts: 'Europe' is grounded by 'European sales' and by
+    'most Europeans'.
     """
     name = norm_entity(ent)
-    return bool(name) and re.search(r"(?<!\w)" + re.escape(name) + r"(?:'s|s|n|an|ian|ese)?(?!\w)", text) is not None
+    return bool(name) and re.search(r"(?<!\w)" + re.escape(name) + r"(?:'s|s|(?:n|an|ian|ese)s?)?(?!\w)",
+                                    text) is not None
 
 
 def _split_title(name: str) -> tuple[str, str]:
@@ -237,22 +341,58 @@ def _calendar_words(text: str) -> set[int]:
     return {_CALENDAR[w] for w in _CALENDAR_RE.findall(text)}
 
 
+def _source_calendar_words(text: str) -> set[int]:
+    """Month and weekday names in a source. 'may' or 'march' counts only where it reads as a date."""
+    out = set()
+    for m in _CALENDAR_RE.finditer(text):
+        word = m.group(1)
+        if word not in _AMBIGUOUS_MONTHS or _MONTH_BEFORE_RE.search(text[max(0, m.start() - 12):m.start()]) \
+                or _MONTH_AFTER_RE.match(text, m.end()):
+            out.add(_CALENDAR[word])
+    return out
+
+
+def _numeric_dates(text: str) -> set[tuple[int, int, int]]:
+    """(year, month index, day) of every all-number date: '2019-11-04', and both readings of '03/04/2022'."""
+    found = {(int(y), int(m) - 1, int(d)) for y, m, d in _ISO_DATE_RE.findall(text)}
+    for a, b, y in _SLASH_DATE_RE.findall(text):
+        found |= {(int(y), int(a) - 1, int(b)), (int(y), int(b) - 1, int(a))}
+    return {(y, m, d) for y, m, d in found if 0 <= m < 12 and 1 <= d <= 31}
+
+
+def _in_numeric_date(nums: set[float], months: set[int], text: str) -> bool:
+    """'November 4, 2019' is the source's '2019-11-04', but not its '2019-04-11'."""
+    months = {m for m in months if m < 12}
+    years = {int(n) for n in nums if n.is_integer() and 1000 <= n <= 2100}
+    days = {int(n) for n in nums if n.is_integer() and 1 <= n <= 31}
+    if len(months) != 1 or len(years) > 1 or len(days) > 1 or len(years) + len(days) != len(nums):
+        return False
+    return any(m in months and (not years or y in years) and (not days or d in days)
+               for y, m, d in _numeric_dates(text))
+
+
 def grounded(ent: str, label: str, text: str, text_numbers: set[float]) -> bool:
     """The entity is stated in the folded text, or (for dates) its numbers and month names are."""
     if mentioned(ent, text) or (label == "PERSON" and _person_grounded(ent, text)):
         return True
-    nums = numbers(ent)
+    nums = plain_numbers(ent)       # 'the fourth quarter of 2023' is checked by its year; ordinals by number_mismatch
+    if not nums:
+        return False
+    months = _calendar_words(fold(ent))
     # 'August 1969' is not grounded by '1969' alone: the month must match too
-    return bool(nums) and all(has_number(text_numbers, n) for n in nums) \
-        and _calendar_words(fold(ent)) <= _calendar_words(text)
+    if all(has_number(text_numbers, n) for n in nums) and months <= _source_calendar_words(text):
+        return True
+    return _in_numeric_date(nums, months, text)
 
 
 def extract(nlp, text: str) -> Facts:
     doc = nlp(text)
-    # Relative dates without numbers ("last year", "the century") are too paraphrase-prone to check.
+    # Relative dates without numbers ("last year", "the century", "the fourth quarter") are too
+    # paraphrase-prone to check; an ordinal is compared by number_mismatch instead.
     ents = [(e.text, e.label_) for e in doc.ents
-            if e.label_ in FACT_ENTITY_LABELS and not (e.label_ == "DATE" and not numbers(e.text))]
-    return Facts(numbers(text), ents)
+            if e.label_ in FACT_ENTITY_LABELS and not (e.label_ == "DATE" and not plain_numbers(e.text))]
+    found = [q for q in quantities(text) if not q.ordinal]
+    return Facts({q.value for q in found}, ents, {q.value for q in found if q.decrease})
 
 
 def conflicts(nlp, claim_text: str, claim: Facts, related: list[str], source_lower: str) -> list[str]:
@@ -301,21 +441,76 @@ def same_values_other_notation(claim_text: str, evidence: str) -> bool:
     return bool(claim_raw - evidence_raw) or bool(words - set(re.findall(r"[a-z]+", fold(evidence))))
 
 
+def canonical_numbers(text: str) -> str:
+    """The text with every number in plain digits: '$2.1 billion' and '$2,100 million' -> '$2100000000',
+    '1,280.5' -> '1280.5', 'twenty-one' -> '21', 'third' -> '3rd'.
+
+    Two texts that differ only in how they write equal numbers then read the same to the NLI model.
+    """
+    t, found = _scan(text)
+    out, last = [], 0
+    for start, end, q in sorted(found, key=lambda f: f[0]):
+        out += [t[last:start], _digits(q, t[start:end])]
+        last = end
+    return "".join(out) + t[last:]
+
+
+def _digits(q: Quantity, written: str) -> str:
+    sign = "-" if q.value < 0 else ""
+    currency = written.lstrip("-")[:1] if written.lstrip("-")[:1] in "$€£" else ""
+    n = abs(q.value)
+    digits = f"{n:.15g}"
+    if q.ordinal:
+        suffix = "th" if 10 <= n % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(int(n) % 10, "th")
+        digits += suffix
+    return sign + currency + digits
+
+
+def _values(q: Quantity) -> set[float]:
+    """What a number may stand for: 'fell 3.2%' is also the '-3.2%' a source may print."""
+    return {q.value, -q.value} if q.decrease else {q.value}
+
+
+def _band(value: float) -> int | None:
+    return math.floor(math.log10(abs(value))) if value else None
+
+
+def _same_kind(q: Quantity, e: Quantity) -> bool:
+    """Both count the same thing. Two bare numbers ('3 million' vs '2,000,000') are taken to."""
+    return q.ordinal == e.ordinal and bool((q.kinds & e.kinds) or not (q.kinds or e.kinds))
+
+
+def _lone_partner(q: Quantity, ev_q: list[Quantity]) -> list[Quantity]:
+    """The one evidence number a claim number must mean when only one side names its unit.
+
+    '3.2 million units' vs 'reached 2.9 million': the unit is implicit on one side. This only holds for
+    a plain count noun (never money, %, a time, a year or a day: '14 percent' does not stand in for
+    '$412 million'), for numbers of the same order of magnitude, and when exactly one such number exists.
+    """
+    def fits(e: Quantity) -> bool:
+        return (e.ordinal == q.ordinal and bool(e.kinds) != bool(q.kinds)
+                and not (e.kinds | q.kinds) & (_STRONG_KINDS | _LABEL_NOUNS)
+                and _band(e.value) is not None and _band(e.value) == _band(q.value))
+    partners = [e for e in ev_q if fits(e)]
+    return partners if len(partners) == 1 else []
+
+
 def number_mismatch(claim_text: str, evidence: str) -> str | None:
     """A claim number that differs from every evidence number counting the same thing.
 
-    Numbers are compared with the single best-matching sentence: it states the same fact. A claim number
-    with no same-kind number there ('14 percent' against a sentence about '$412 million', or a claim that
-    joins two sentences) is no conflict; novel() still checks that it appears somewhere in the sources.
+    Numbers are compared with the single best-matching sentence: it states the same fact. They count the
+    same thing when they share a kind ('300 workers' and '1,500 people' both count people), when both are
+    bare, or when one is bare and is the only same-sized number the other could mean (_lone_partner).
+    A claim number with no such partner ('14 percent' against a sentence about '$412 million', or a claim
+    that joins two sentences) is no conflict; novel() still checks that it appears somewhere in the sources.
     """
     ev_q = quantities(evidence)
-    ev_values = {q.value for q in ev_q}
+    ev_values = set().union(*(_values(e) for e in ev_q))
     claim_vals, ev_vals = set(), set()
     for q in quantities(claim_text):
-        if has_number(ev_values, q.value):
+        if any(has_number(ev_values, v) for v in _values(q)):
             continue
-        # two bare numbers ('3 million' vs '2,000,000') are taken to count the same thing
-        same_kind = {e.value for e in ev_q if (e.kinds & q.kinds) or not (e.kinds or q.kinds)}
+        same_kind = {e.value for e in [e for e in ev_q if _same_kind(q, e)] or _lone_partner(q, ev_q)}
         if same_kind:
             claim_vals.add(q.value)
             ev_vals |= same_kind
@@ -338,7 +533,7 @@ def polarity_flip(nlp, claim: str, evidence: str) -> bool:
     or on a predicate the other text only uses in a side clause does not.
     """
     c, e = nlp(claim), nlp(evidence)
-    return _flipped(e, c) or _flipped(c, e)
+    return _flipped(e, c) or _flipped(c, e) or _exclusion_flipped(e, c) or _exclusion_flipped(c, e)
 
 
 def _flipped(negated_doc, other_doc) -> bool:
@@ -357,12 +552,60 @@ def _flipped(negated_doc, other_doc) -> bool:
     return False
 
 
+_ARGUMENT_DEPS = {"conj", "dobj", "prep", "pobj", "pcomp", "dative"}
+
+
+def _exclusions(doc) -> list[tuple[object, object]]:
+    """'covers dental care but not vision care' -> (the predicate 'covers', the excluded argument 'care').
+
+    Here the negation sits on an argument, not on the verb. The predicate is found by walking up through
+    objects, prepositions and conjuncts, and must be what the sentence asserts.
+    """
+    out = []
+    for t in doc:
+        if t.dep_ != "neg" or t.head.pos_ in ("VERB", "AUX"):
+            continue
+        pred = t.head
+        while pred.dep_ in _ARGUMENT_DEPS:
+            pred = pred.head
+        if pred is not t.head and _is_main(pred):
+            out.append((pred, t.head))
+    return out
+
+
+def _content_lemmas(tokens) -> set[str]:
+    return {w.lemma_.lower() for w in tokens if w.pos_ in _CONTENT_POS and w.dep_ != "neg"}
+
+
+def _exclusion_flipped(negated_doc, other_doc) -> bool:
+    """An argument excluded in `negated_doc` ('but not vision care') is asserted in `other_doc`'s main clause.
+
+    The argument is all of its content words, so 'covers dental care' does not assert the excluded
+    'vision care' through the shared 'care'.
+    """
+    # what the other text excludes itself is not asserted there ('dental care but not vision care' again)
+    excluded_there = {w.i for _, arg in _exclusions(other_doc) for w in arg.subtree}
+    for pred, arg in _exclusions(negated_doc):
+        words, lemma = _content_lemmas(arg.subtree), pred.lemma_.lower()
+        for tok in other_doc:
+            if tok.lemma_.lower() != lemma or not _is_main(tok) or any(ch.dep_ == "neg" for ch in tok.children):
+                continue
+            asserted = _content_lemmas(w for w in tok.subtree if w.i not in excluded_there and w.i != tok.i)
+            if words and words <= asserted:
+                return True
+    return False
+
+
 def _is_light(tok) -> bool:
     return tok.pos_ == "AUX" or tok.lemma_.lower() in _LIGHT_VERBS
 
 
 def _negated_predicates(doc) -> list:
-    """For 'X is not Y' the negation sits on the copula: the predicate is Y, not 'be'."""
+    """For 'X is not Y' the negation sits on the copula: the predicate is Y, not 'be'.
+
+    A verb coordinated by 'or' / 'nor' under the same negation is negated too: in "did not raise
+    prices or cut jobs" both 'raise' and 'cut' are denied.
+    """
     out = []
     for t in doc:
         if t.dep_ != "neg":
@@ -370,7 +613,28 @@ def _negated_predicates(doc) -> list:
         head = t.head
         preds = [ch for ch in head.children if ch.dep_ in _PREDICATE_DEPS] if _is_light(head) else []
         out += preds or [head]
+        frontier = [head]
+        while frontier:
+            for conj in frontier.pop().children:
+                if _shares_negation(conj):
+                    out.append(conj)
+                    frontier.append(conj)
     return out
+
+
+def _shares_negation(conj) -> bool:
+    """A conjunct verb with no subject, auxiliary or negation of its own, joined by 'or' / 'nor'.
+
+    'and' does not carry the negation: "do not produce insulin and require therapy" affirms 'require'.
+    """
+    own = {c.dep_ for c in conj.children}
+    if conj.dep_ != "conj" or conj.pos_ not in ("VERB", "AUX") or \
+            own & {"nsubj", "nsubjpass", "expl", "aux", "auxpass", "neg"}:
+        return False
+    head = conj.head
+    ccs = ([c for c in head.children if c.dep_ == "cc" and head.i < c.i < conj.i]
+           or [c for c in conj.children if c.dep_ == "cc" and c.i > conj.i])
+    return bool(ccs) and ccs[-1].lower_ in ("or", "nor")
 
 
 def _is_main(tok) -> bool:
@@ -396,11 +660,28 @@ def _frame(tok) -> set[str]:
     return words
 
 
-def novel(claim: Facts, source_lower: str) -> list[str]:
-    """Numbers and names in the claim that appear in no source at all."""
-    source_lower = fold(source_lower)
-    src_nums = numbers(source_lower)
-    out = [fmt_numbers({n}) for n in claim.numbers if not has_number(src_nums, n)]
+_LOWER_ABBR_RE = re.compile(r"(?<![\w.])(\d+(?:[.,]\d+)*)([kmb])\b")
+
+
+def _source_values(source_text: str) -> set[float]:
+    """Every value the sources state, read before lower-casing so '5M' stays 5 million.
+
+    Text that is already all lower-case has lost that case, so a glued '5m' there is read both as 5 and
+    as 5 million: grounding a claim's '5M users' must not depend on how the caller cased the sources.
+    """
+    values = set().union(*(_values(q) for q in quantities(source_text)))
+    if source_text == source_text.lower():
+        upper = _LOWER_ABBR_RE.sub(lambda m: m[1] + m[2].upper(), source_text)
+        values |= set().union(*(_values(q) for q in quantities(upper)))
+    return values
+
+
+def novel(claim: Facts, source_text: str) -> list[str]:
+    """Numbers and names in the claim that appear in no source at all. Ordinals are not checked here."""
+    src_nums = _source_values(source_text)
+    source_lower = fold(source_text)
+    out = [fmt_numbers({n}) for n in claim.numbers
+           if not has_number(src_nums, n) and not (n in claim.decreasing and has_number(src_nums, -n))]
     for ent, label in claim.entities:
         if not grounded(ent, label, source_lower, src_nums):
             out.append(f"'{ent}'")

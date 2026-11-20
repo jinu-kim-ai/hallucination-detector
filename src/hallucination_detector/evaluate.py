@@ -106,15 +106,21 @@ def score(preds: list[dict]) -> dict:
 
 
 def sweep_thresholds(detector: HallucinationDetector, sources, rows, values=None) -> list[dict]:
-    """Re-score at several support thresholds; returns rows sorted by binary F1."""
-    values = values or [round(0.45 + 0.025 * i, 3) for i in range(13)]
+    """Re-score at several support thresholds; returns rows sorted by binary F1.
+
+    Values below the related threshold are skipped: Config rejects support < related.
+    """
     original = detector.config
+    values = [v for v in (values or [round(0.45 + 0.025 * i, 3) for i in range(13)])
+              if original.related_threshold <= v <= 1.0]
     out = []
-    for v in values:
-        detector.config = replace(original, support_threshold=v)
-        m = score(predict_all(detector, sources, rows))["binary_hallucination_detection"]
-        out.append({"support_threshold": v, **m})
-    detector.config = original
+    try:
+        for v in values:
+            detector.config = replace(original, support_threshold=v)
+            m = score(predict_all(detector, sources, rows))["binary_hallucination_detection"]
+            out.append({"support_threshold": v, **m})
+    finally:
+        detector.config = original
     return sorted(out, key=lambda r: -r["f1"])
 
 

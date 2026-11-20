@@ -73,6 +73,63 @@ def test_invalid_case_files_are_rejected(tmp_path, change, message):
         load_case(path)
 
 
+def _factual_case() -> dict:
+    return json.loads(next(CASES.glob("*_factual.json")).read_text(encoding="utf-8"))
+
+
+def _set(key, value):
+    return lambda d: d.update({key: value})
+
+
+MALFORMED = [
+    (_set("expected", [{"label": "SUPPORTED"}]), "non-empty 'claim'"),
+    (_set("expected", ["text"]), "must be an object"),
+    (_set("expected", [{"claim": "", "label": "SUPPORTED"}]), "non-empty 'claim'"),
+    (_set("expected", [{"claim": 5, "label": "SUPPORTED"}]), "non-empty 'claim'"),
+    (_set("expected", 5), "non-empty list"),
+    (_set("expected", []), "non-empty list"),
+    (_set("response", None), "'response' must be a string"),
+    (_set("sources", 5), "invalid sources"),
+    (_set("sources", [{"id": "s", "text": 1911}]), "invalid sources"),
+]
+
+
+@pytest.mark.parametrize("change, message", MALFORMED)
+def test_malformed_case_files_are_value_errors_naming_the_file(tmp_path, change, message):
+    data = _factual_case()
+    change(data)
+    path = tmp_path / "bad.json"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(ValueError, match=message) as info:
+        load_case(path)
+    assert str(path) in str(info.value)
+
+
+@pytest.mark.parametrize("text, message", [("[1, 2]", "must be a JSON object"), ("{not json", "bad.json")])
+def test_case_file_that_is_not_a_json_object_is_rejected(tmp_path, text, message):
+    path = tmp_path / "bad.json"
+    path.write_text(text, encoding="utf-8")
+    with pytest.raises(ValueError, match=message):
+        load_case(path)
+
+
+def test_case_file_with_a_bom_loads(tmp_path):
+    path = tmp_path / "bom.json"
+    path.write_bytes(b"\xef\xbb\xbf" + json.dumps(_factual_case()).encode("utf-8"))
+    assert load_case(path).expected == _factual_case()["expected"]
+
+
+@pytest.mark.parametrize("change, message", MALFORMED[:2])
+def test_cli_cases_with_a_malformed_file_is_a_one_line_error(tmp_path, capsys, change, message):
+    data = _factual_case()
+    change(data)
+    (tmp_path / "a.json").write_text(json.dumps(data), encoding="utf-8")
+    assert main(["--no-nli", "--embedder", "hashing", "cases", "--dir", str(tmp_path)]) == 2
+    err = capsys.readouterr().err
+    assert err.startswith("hallucheck: error: ") and "Traceback" not in err and len(err.strip().splitlines()) == 1
+    assert str(tmp_path / "a.json") in err and message in err
+
+
 def test_cli_cases_command(capsys):
     assert main(["--no-nli", "cases", "--dir", str(CASES)]) == 0
     out = capsys.readouterr().out

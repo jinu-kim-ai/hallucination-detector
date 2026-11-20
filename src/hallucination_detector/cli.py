@@ -20,7 +20,7 @@ from .config import Config
 from .evaluate import format_report, load_dataset, predict_all, score, sweep_thresholds
 from .pipeline import HallucinationDetector
 from .report import to_html, to_json, to_text
-from .sources import load_request, load_text_sources
+from .sources import load_request, load_text_sources, read_text
 
 T = TypeVar("T")
 
@@ -116,8 +116,8 @@ def _load_detect_input(args: argparse.Namespace) -> tuple[str, list]:
         if not isinstance(response, str):
             raise ValueError(f"{args.request}: 'response' must be a string")
         return response, sources
-    # utf-8-sig: Windows tools (PowerShell 5.1 Out-File, Notepad) often start the file with a BOM
-    response = _naming(args.answer, lambda: Path(args.answer).read_text(encoding="utf-8-sig"))
+    # read_text drops a BOM and keeps \r\n, so the claims' response spans index the file as written
+    response = _naming(args.answer, lambda: read_text(args.answer))
     return response, _naming(", ".join(args.source), lambda: load_text_sources(args.source))
 
 

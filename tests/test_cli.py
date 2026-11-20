@@ -35,6 +35,27 @@ def test_answer_file_with_a_bom_is_read_without_it(tmp_path, capsys):
     assert claims[0]["text"] == CLAIM
 
 
+def test_crlf_answer_file_spans_index_the_file_as_written(tmp_path, capsys):
+    raw = "Marie Curie was a physicist.\r\nShe was born in Warsaw in 1867.\r\nShe died in 1934.\r\n"
+    (tmp_path / "answer.txt").write_bytes(raw.encode("utf-8"))
+    (tmp_path / "source.txt").write_text("Marie Curie was born in Warsaw in 1867. She died in 1934.", encoding="utf-8")
+    assert main(["--no-nli", "--embedder", "hashing", "detect", "--answer", str(tmp_path / "answer.txt"),
+                 "--source", str(tmp_path / "source.txt"), "--json", "-"]) == 0
+    claims = json.loads(capsys.readouterr().out)["claims"]
+    assert len(claims) == 3
+    for claim in claims:
+        start, end = claim["response_span"]
+        assert raw[start:end] == claim["text"]
+    assert claims[-1]["text"] == "She died in 1934."
+
+
+def test_support_threshold_below_related_threshold_is_a_one_line_error(tmp_path, capsys):
+    request = _request(tmp_path, {"response": CLAIM, "sources": [CLAIM]})
+    assert main(["--no-nli", "--embedder", "hashing", "--related-threshold", "0.7", "--support-threshold", "0.6",
+                 "detect", "--request", str(request)]) == 2
+    assert "support_threshold" in _one_line_error(capsys)
+
+
 # ---------------------------------------------------------------------- 14: piped stdout on Windows
 def test_non_cp1252_text_prints_when_stdout_is_a_cp1252_pipe(tmp_path, monkeypatch):
     request = _request(tmp_path, {"response": "Marie Skłodowska Curie was born in Warsaw in 1867.",
@@ -146,6 +167,22 @@ def test_app_reports_invalid_input_with_st_error(app, ids, response, expected):
     app.button[0].click().run()
     assert not app.exception
     assert any(expected in e.value for e in app.error)
+
+
+def test_app_why_column_keeps_the_similarity_of_an_uncited_claim(app):
+    app.text_area[0].set_value("Some patients feel sick to their stomach. "
+                               "Common side effects include nausea and headache. "
+                               "Common side effects include nausea and headache.")
+    app.text_area(key="text0").set_value("The usual adult dose is 500 mg twice daily with food. "
+                                         "Common side effects include nausea and headache.")
+    app.text_area(key="text1").set_value("")
+    app.button[0].click().run()
+    assert not app.exception
+    rows = app.dataframe[0].value
+    uncited, cited, duplicate = rows.to_dict("records")
+    assert uncited["evidence"] == "" and uncited["why"].startswith("best evidence similarity 0.")
+    assert cited["evidence"] and "best evidence" not in cited["why"]      # the evidence column shows it
+    assert duplicate["why"] == "duplicate of claim 2"
 
 
 def test_app_gives_blank_ids_a_unique_default(app):

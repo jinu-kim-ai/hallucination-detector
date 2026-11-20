@@ -35,6 +35,19 @@ _SENTENCE_END = (".", "!", "?", ";")
 _NO_SPACE_BEFORE = (",", ".", ";", ":", "%", ")")
 _SUBJECT = ("nsubj", "nsubjpass")
 _CONTRAST = ("although", "though", "whereas")
+_AUX = ("aux", "auxpass")
+# Verbs whose bare -ed form is a past tense, not a passive participle, so a shared "was" does not fit them.
+_INTRANSITIVE = frozenset({
+    "die", "retire", "land", "survive", "improve", "expand", "arrive", "resign", "emigrate", "immigrate",
+    "graduate", "decline", "grow", "remain", "return", "succeed", "fail", "live", "work", "serve", "marry",
+    "move", "stay", "rise", "fall", "recover", "settle", "travel", "appear", "disappear", "occur", "happen",
+    "exist", "collapse", "evolve", "flourish", "prosper", "perish", "vanish", "erupt", "retreat",
+    "compete", "participate", "testify", "debut"})
+# Heads that say little alone, so ", which ..." after "<head> of Y" describes the whole phrase, not Y.
+_EMPTY_HEADS = frozenset({
+    "one", "some", "most", "part", "all", "many", "few", "each", "none", "half", "rest", "majority", "minority",
+    "price", "cost", "number", "share", "rate", "level", "value", "amount", "percentage", "proportion", "total",
+    "city", "town", "state", "university", "republic", "kingdom", "province", "county", "island"})
 
 
 def load_nlp(model: str = "en_core_web_sm"):
@@ -53,6 +66,7 @@ class _Piece(NamedTuple):
     subject: object         # subject token (or None), used to resolve a pronoun
     own_subject: bool       # the clause has its own subject, so a short piece is still a full claim
     words: dict             # token id -> text to show instead ("which" -> "this")
+    context: tuple = ()     # tokens to check instead, when the piece cannot be checked alone ("This beat ...")
 
 
 class ClaimExtractor:
@@ -85,6 +99,8 @@ class ClaimExtractor:
                     referent = referents.resolve(piece.subject)
                     if referent and any(t.i == piece.subject.i for t in tokens):
                         claim.resolved_text = _finish(_join(tokens, {**piece.words, piece.subject.i: referent}))
+                    if piece.context:       # also keeps two "This beat expectations." from different facts apart
+                        claim.resolved_text = _finish(_join(piece.context[_opener_length(piece.context):]))
                     key = _dedupe_key(claim.resolved_text)
                     claim.duplicate_of = seen.get(key)
                     seen.setdefault(key, claim.id)
@@ -171,8 +187,10 @@ def _decompose(sent) -> list[_Piece]:
     return pieces + contrast + relative
 
 
-def _piece(tokens: list, own: list, subject, own_subject: bool, words: dict[int, str] | None = None) -> _Piece:
-    return _Piece(tokens, own[0].idx, own[-1].idx + len(own[-1]), subject, own_subject, words or {})
+def _piece(tokens: list, own: list, subject, own_subject: bool, words: dict[int, str] | None = None,
+           context: list | None = None) -> _Piece:
+    return _Piece(tokens, own[0].idx, own[-1].idx + len(own[-1]), subject, own_subject, words or {},
+                  tuple(context or ()))
 
 
 def _subtree(token) -> list:
@@ -210,7 +228,45 @@ def _inherited_subject(verb):
 
 # --- coordinated verbs
 def _verb_conjuncts(head, excluded: set[int]) -> list:
-    return [t for t in head.children if t.dep_ == "conj" and t.pos_ in ("VERB", "AUX") and t.i not in excluded]
+    return [t for t in head.children if t.dep_ == "conj" and t.pos_ in ("VERB", "AUX") and t.i not in excluded
+            and _split_keeps_polarity(t)]
+
+
+def _split_keeps_polarity(verb) -> bool:
+    """A conjunct under a shared "not" / "never" is split off only when the negation can go with it.
+
+    "did not raise prices or cut jobs" means neither happened, so each piece keeps "did not". With "and"
+    (or "but", or bare commas) the scope is unclear: "did not raise prices and cut jobs" may say the jobs
+    were cut, so the coordination stays one claim rather than risk reversing a piece."""
+    if not _under_negation(verb):
+        return True
+    return _coordinator(verb) in ("or", "nor") and any(t.dep_ == "neg" for t in _shared_aux(verb))
+
+
+def _shares_head(verb) -> bool:
+    """A conjunct with no subject, auxiliary or negation of its own takes them from the verb before it."""
+    return verb.dep_ == "conj" and not _has_own_subject(verb) and not any(
+        c.dep_ in _AUX + ("neg",) for c in verb.children)
+
+
+def _under_negation(verb) -> bool:
+    if not _shares_head(verb):
+        return False
+    head = verb.head
+    prefix = _prefix(head)
+    neither = any(c.dep_ == "preconj" and c.lower_ == "neither" for c in head.children)
+    if neither or any(t.dep_ == "neg" for t in prefix):
+        return True
+    return not prefix and _under_negation(head)      # "did not A, B or C": C sits under B, which sits under A
+
+
+def _coordinator(verb) -> str | None:
+    """The word joining a conjunct to the verb before it; in "A, B or C" the "or" before C also joins B."""
+    head = verb.head
+    before = [c for c in head.children if c.dep_ == "cc" and head.i < c.i < verb.i]
+    after = [c for c in verb.children if c.dep_ == "cc" and c.i > verb.i]
+    found = before or after
+    return found[-1].lower_ if found else None
 
 
 def _all_conjuncts(root, excluded: set[int]) -> list:
@@ -253,17 +309,33 @@ def _clause_ids(head, verb) -> set[int]:
 
 
 def _shared_aux(verb) -> list:
-    """Auxiliaries a conjunct shares with the verb before it: "claims are repaired or [are] replaced"."""
-    if verb.dep_ != "conj" or any(c.dep_ in ("aux", "auxpass") for c in verb.children):
+    """Auxiliaries and negation a conjunct shares with the verb before it: "claims are repaired or [are]
+    replaced", "did not raise prices or [did not] cut jobs"."""
+    if not _shares_head(verb):
         return []
     head = verb.head
-    aux = [c for c in head.children if c.dep_ in ("aux", "auxpass") and c.i < head.i] or _shared_aux(head)
-    return aux if aux and _verb_form(verb) == _verb_form(head) else []
+    shared = _prefix(head) or _shared_aux(head)
+    # An auxiliary only fits a verb of the same form; "never" alone fits any finite verb.
+    if any(t.dep_ in _AUX for t in shared) and _verb_form(verb) != _verb_form(head):
+        return []
+    return shared
+
+
+def _prefix(head) -> list:
+    """The auxiliaries and negation in front of a verb, with a contraction kept whole ("ca" + "n't")."""
+    found = {c.i: c for c in head.children if c.dep_ in _AUX + ("neg",) and c.i < head.i}
+    doc = head.doc
+    for aux in [t for t in found.values() if t.dep_ in _AUX]:
+        if aux.i + 1 < len(doc) and doc[aux.i + 1].dep_ == "neg":     # never copy a bare "ca" / "wo"
+            found[aux.i + 1] = doc[aux.i + 1]
+    return [found[i] for i in sorted(found)]
 
 
 def _verb_form(verb) -> str:
-    # A regular past form with no object is often a participle the tagger called VBD ("was recruited and tested").
-    if verb.tag_ == "VBD" and verb.lower_.endswith("ed") and not any(c.dep_ == "dobj" for c in verb.children):
+    # A regular past form with no object is often a participle the tagger called VBD ("was recruited and tested"),
+    # unless the verb is one that rarely takes an object: "was born ... and died" must not become "was died".
+    if (verb.tag_ == "VBD" and verb.lower_.endswith("ed") and verb.lemma_.lower() not in _INTRANSITIVE
+            and not any(c.dep_ == "dobj" for c in verb.children)):
         return "VBN"
     return verb.tag_
 
@@ -279,33 +351,48 @@ def _relative_clause(sent, pronoun) -> tuple[_Piece, set[int]] | None:
     is_subject = pronoun.dep_ in _SUBJECT
     if not is_subject and (pronoun.dep_ != "dobj" or pronoun.lower_ == "that"):
         return None
-    verb = pronoun.head
+    gov = verb = pronoun.head               # gov is the verb "which" belongs to; verb heads the relative clause
     while verb.dep_ in ("xcomp", "ccomp") and verb.head.i > pronoun.i:
         verb = verb.head                    # spaCy may hang an object "which" off an inner verb
     if verb.dep_ not in ("relcl", "advcl") or verb.pos_ not in ("VERB", "AUX") or verb.left_edge.i != pronoun.i:
         return None
+    if is_subject and verb.i != gov.i:
+        return None                         # ", which experts believe is safe," has no subject slot to fill: keep whole
     clause = [t for t in _subtree(verb) if _keep(t)]
     clause_ids = {t.i for t in verb.subtree}
     body = [t for t in clause if t.i != pronoun.i]
     if not body:
         return None
-    # With no noun phrase right before the comma, "which" stands for the whole clause: check it as "this".
-    antecedent = _antecedent(doc[pronoun.i - 2], clause_ids)
-    stand_in, words = (antecedent, {}) if antecedent else ([pronoun], {pronoun.i: "this"})
+    antecedent = _antecedent(doc[pronoun.i - 2], clause_ids, pronoun, verb if is_subject else None)
+    if antecedent:
+        stand_in, context = antecedent, []
+        first = antecedent[0]               # "The telescope, which NASA launched" -> "NASA launched the telescope"
+        words = {first.i: first.lower_} if first.i == sent.start and first.pos_ == "DET" else {}
+    else:
+        # With no noun phrase right before the comma, "which" stands for the whole clause. "This beat expectations"
+        # says nothing checkable alone, so it is checked together with the clause it describes.
+        stand_in, words = [pronoun], {pronoun.i: "this"}
+        context = [t for t in sent if t.i <= max(clause_ids) and _keep(t)]
     if is_subject:
         tokens = stand_in + body
-    else:                                   # the object goes after the verb: "CFO Okafor attributed this to costs"
-        after = max([verb.i] + [c.i for c in verb.children if c.dep_ == "prt"])
-        at = sum(1 for t in body if t.i <= after)
+    else:                                   # the object goes where it was taken from: "signed off on the merger"
+        at = sum(1 for t in body if t.i <= _object_slot(gov))
         tokens = body[:at] + stand_in + body[at:]
     right = verb.right_edge
     excluded = clause_ids | {pronoun.i - 1}
     if right.i + 1 < sent.end and doc[right.i + 1].text == ",":
         excluded.add(right.i + 1)
-    return _piece(tokens, clause, None, True, words), excluded
+    return _piece(tokens, clause, None, True, words, context), excluded
 
 
-def _antecedent(anchor, clause_ids: set[int]) -> list | None:
+def _object_slot(gov) -> int:
+    """The token the moved object follows: the verb, its particle, or a stranded preposition ("signed off on")."""
+    prt = [c.i for c in gov.children if c.dep_ == "prt"]
+    stranded = [c.i for c in gov.children if c.dep_ == "prep" and c.i > gov.i and not list(c.children)]
+    return max([gov.i] + prt + stranded)
+
+
+def _antecedent(anchor, clause_ids: set[int], pronoun, verb=None) -> list | None:
     """The noun phrase right before ", which ...". That is what the clause describes, even when spaCy
     attaches the clause higher up ("a better choice than ibuprofen, which ..." describes ibuprofen)."""
     head = anchor
@@ -313,10 +400,46 @@ def _antecedent(anchor, clause_ids: set[int]) -> list | None:
         head = head.head                                    # "Python 3.0" -> Python
     if head.pos_ not in ("NOUN", "PROPN", "PRON"):         # "in 2005, which ...", "a year ago, which ..."
         return None
-    while head.dep_ == "pobj" and head.head.lower_ == "of" and head.head.head.pos_ in ("NOUN", "PROPN", "PRON"):
-        head = head.head.head                               # "the capital of France" -> capital
+    while _describes_outer_noun(head, pronoun, verb):
+        head = head.head.head                               # "the CEO of Acme, who ..." -> CEO
     return [t for t in _subtree(head) if t.i <= anchor.i and t.i not in clause_ids
             and t.dep_ not in ("mark", "cc") and t.text not in (",", ";")]
+
+
+def _describes_outer_noun(noun, pronoun, verb) -> bool:
+    """Whether ", which / who ..." after "X of Y" (noun is Y) describes X. By default it describes Y:
+    "the capital of France, which has 68 million people" is about France."""
+    if noun.dep_ != "pobj" or noun.head.lower_ != "of" or noun.head.head.pos_ not in ("NOUN", "PROPN", "PRON"):
+        return False
+    outer = noun.head.head
+    number = _verb_number(verb)
+    if number and _noun_number(outer) not in (None, number) and _noun_number(noun) == number:
+        return False                                        # "the works of Picasso, who was born ..." is singular
+    if outer.lemma_.lower() in _EMPTY_HEADS or _same_entity(noun, outer):
+        return True                                         # "the price of oil", "the University of Oxford"
+    if pronoun.lower_ in ("who", "whom"):                   # "the CEO of Acme, who" is the CEO, not Acme
+        return not (noun.ent_type_ == "PERSON" and outer.ent_type_ != "PERSON")
+    return False
+
+
+def _verb_number(verb) -> str | None:
+    """"sing" / "plur" when the relative clause's finite verb shows it ("was", "has", "were")."""
+    if verb is None:
+        return None
+    for t in [c for c in verb.children if c.dep_ in _AUX] + [verb]:
+        if t.tag_ == "VBZ" or t.lower_ == "was":
+            return "sing"
+        if t.tag_ == "VBP" or t.lower_ == "were":
+            return "plur"
+    return None
+
+
+def _noun_number(noun) -> str | None:
+    return {"NN": "sing", "NNP": "sing", "NNS": "plur", "NNPS": "plur"}.get(noun.tag_)
+
+
+def _same_entity(a, b) -> bool:
+    return any(e.start <= a.i < e.end and e.start <= b.i < e.end for e in a.doc.ents)
 
 
 def _contrast_clause(sent, verb, excluded: set[int]) -> tuple[_Piece, set[int]] | None:
@@ -346,30 +469,60 @@ class _Referents:
 
     def __init__(self):
         self.person = self.thing = self.plural = None
+        self.rivals: dict = {}      # kind -> latest named object that the same pronoun could also mean
 
     @staticmethod
     def _subject(sent):
         return _subject(sent.root)
 
     def resolve(self, subj) -> str | None:
-        """The referent for a he / she / it / they subject token, when one is known."""
+        """The referent for a he / she / it / they subject token, when one is known and not ambiguous."""
         if subj is None or subj.pos_ != "PRON" or _is_dummy_it(subj):
             return None
-        return {"he": self.person, "she": self.person, "it": self.thing, "they": self.plural}.get(subj.lower_)
+        kind = _PRONOUN_KIND.get(subj.lower_)
+        if kind is None or self._ambiguous(kind, subj):
+            return None
+        return getattr(self, kind)
+
+    def _ambiguous(self, kind: str, subj) -> bool:
+        # "The FDA approved Zestril, and it became ...": "it" may be Zestril, so guessing the FDA could invent
+        # a contradiction. A rival later in the pronoun's own clause ("She married Pierre") does not count.
+        rival = self.rivals.get(kind)
+        return rival is not None and (rival.doc is not subj.doc or rival.i < subj.i)
 
     def update(self, sent) -> None:
         subj = self._subject(sent)
-        if subj is None or subj.pos_ == "PRON":
-            return
-        ent = next((e for e in sent.ents if e.start <= subj.i < e.end), None)
-        chunk = next((c for c in sent.noun_chunks if c.start <= subj.i < c.end), None)
-        phrase = ent.text if ent is not None else (chunk.text if chunk is not None else subj.text)
-        if ent is not None and ent.label_ == "PERSON":
-            self.person = phrase
-        elif ent is None and subj.tag_ in ("NNS", "NNPS"):      # "the astronauts"; a company name is an "it"
-            self.plural = phrase
-        else:
-            self.thing = phrase
+        if subj is not None and subj.pos_ != "PRON":
+            ent = next((e for e in sent.ents if e.start <= subj.i < e.end), None)
+            chunk = next((c for c in sent.noun_chunks if c.start <= subj.i < c.end), None)
+            phrase = ent.text if ent is not None else (chunk.text if chunk is not None else subj.text)
+            if ent is not None and ent.label_ == "PERSON":
+                kind = "person"
+            elif ent is None and subj.tag_ in ("NNS", "NNPS"):  # "the astronauts"; a company name is an "it"
+                kind = "plural"
+            else:
+                kind = "thing"
+            setattr(self, kind, phrase)
+            self.rivals.pop(kind, None)
+        for obj in sent:
+            for kind in _rival_kinds(obj):
+                self.rivals[kind] = obj
+
+
+_PRONOUN_KIND = {"he": "person", "she": "person", "it": "thing", "they": "plural"}
+_NUMERIC_ENTS = ("DATE", "TIME", "PERCENT", "MONEY", "QUANTITY", "ORDINAL", "CARDINAL")
+
+
+def _rival_kinds(token) -> set[str]:
+    """Pronoun kinds a named object could be referred to by: "approved Zestril" -> it, "married Pierre Curie" -> he.
+    Only objects of a verb count; "born in Warsaw" does not compete with the subject."""
+    is_object = token.dep_ in ("dobj", "dative") or (token.dep_ == "attr" and token.head.lemma_ != "be")
+    named = token.pos_ == "PROPN" or (token.ent_type_ != "" and token.ent_type_ not in _NUMERIC_ENTS)
+    if not is_object or not named:
+        return set()
+    if token.ent_type_ == "PERSON":
+        return {"person"}
+    return {"thing", "plural"} if token.tag_ in ("NNS", "NNPS") else {"thing"}   # "acquired Beats": it or they
 
 
 def _is_dummy_it(subj) -> bool:

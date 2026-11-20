@@ -44,9 +44,32 @@ from hallucination_detector.schemas import CONTRADICTED, FABRICATED, SUPPORTED
     ("one of the largest cities", set()),
     ("no one knows", set()),
     ("won one award", {1.0}),
+    # compound number words add up
+    ("one hundred twenty people", {120.0}),
+    ("one hundred and twenty", {120.0}),
+    ("one thousand nine hundred", {1900.0}),
+    ("one hundred twenty-five", {125.0}),
+    ("two million three hundred thousand", {2.3e6}),
+    ("between one hundred and two hundred", {100.0, 200.0}),
+    ("twenty one hundred", {2100.0}),
 ])
 def test_number_formats(text, expected):
     assert facts.numbers(text) == expected
+
+
+@pytest.mark.parametrize("text, expected", [
+    # an ordinal is a rank or position, not an amount the sources must contain
+    ("First, the drug lowers blood pressure.", set()),
+    ("Armstrong was the first person on the Moon.", set()),
+    ("Busan is the second-largest city.", set()),
+    ("Fourth-quarter revenue", set()),
+    ("finished 3rd in 2019", {2019.0}),             # digit ordinals alike
+    # a day of the month is a date, not a rank
+    ("on July 20th, 1969", {20.0, 1969.0}),
+    ("the 5th of May", {5.0}),
+])
+def test_plain_numbers_leave_out_ordinals(text, expected):
+    assert facts.plain_numbers(text) == expected
 
 
 def test_equal_values_match_with_relative_tolerance():
@@ -95,6 +118,21 @@ def test_number_mismatch_with_the_best_sentence(nlp):
      "claim says 1, evidence says 2"),
     ("Support for Python 2 officially ended on January 1, 2018.",
      "Support for Python 2 officially ended on January 1, 2020.", "claim says 2018, evidence says 2020"),
+    # different nouns for counted people
+    ("Today the plant employs 300 workers in total.", "Today the plant employs 1,500 people in total.",
+     "claim says 300, evidence says 1500"),
+    ("The company has 500 people.", "The company has 450 employees.", "claim says 500, evidence says 450"),
+    # the unit is implicit on one side
+    ("Sales reached 3.2 million units.", "Sales reached 2.9 million.", "claim says 3.2 million, evidence says 2.9 million"),
+    # a comma-less count is no year when a noun follows it
+    ("The factory has 1,500 workers.", "The factory has 1800 workers.", "claim says 1500, evidence says 1800"),
+    # ...but stays a year after a preposition
+    ("By 2005 sales had doubled.", "Sales doubled by 2004 when the plant opened.", "claim says 2005, evidence says 2004"),
+    # ordinals compare with ordinals
+    ("She ranked third in the race.", "She ranked fifth in the race.", "claim says 3, evidence says 5"),
+    # a decline is not a rise of the same size
+    ("Operating margin rose 3.2% year over year.", "Operating margin changed by -3.2% year over year.",
+     "claim says 3.2, evidence says -3.2"),
 ])
 def test_number_mismatch_compares_numbers_of_the_same_kind(claim, evidence, expected):
     assert facts.number_mismatch(claim, evidence) == f"number mismatch: {expected}"
@@ -110,9 +148,27 @@ def test_number_mismatch_compares_numbers_of_the_same_kind(claim, evidence, expe
      "and resting quietly while awake in the other.",
      "In one session participants took a 20-minute nap at 1:30 p.m., and in the other they rested quietly "
      "while awake for the same period."),
+    # a bare number never stands in for money, a percentage or a year
+    ("Corvane ranked 3 among peers with revenue of $412 million.", "Corvane reported revenue of $412 million."),
+    ("Adults aged 18 to 24 made up 14 percent of respondents in 2000.",
+     "Adults made up 14 percent of respondents in 2000."),
+    # a rank is not a count
+    ("Armstrong was the first person to walk on the Moon.", "About 300 people watched the launch."),
+    ("First, the drug lowers blood pressure in 3 of 4 adults.", "The drug lowers blood pressure in 3 of 4 adults."),
 ])
 def test_number_of_another_kind_is_not_a_mismatch(claim, evidence):
     assert facts.number_mismatch(claim, evidence) is None
+
+
+@pytest.mark.parametrize("claim, evidence", [
+    ("Operating margin fell 3.2% year over year.", "Operating margin changed by -3.2% year over year."),
+    ("Net income declined 12% in the quarter.", "Net income changed by -12% in the quarter."),
+    ("Net income changed by -12% in the quarter.", "Net income declined by 12% in the quarter."),
+    ("Sales posted a 5% decline.", "Sales changed by -5%."),
+])
+def test_a_fall_matches_a_negative_number(nlp, claim, evidence):
+    assert facts.number_mismatch(claim, evidence) is None
+    assert facts.novel(facts.extract(nlp, claim), evidence.lower()) == []
 
 
 @pytest.mark.parametrize("claim, evidence", [
@@ -159,6 +215,31 @@ def test_negation_on_a_shared_verb_is_a_polarity_flip(nlp):
                                "Python 3.0 was not backward compatible with Python 2.")
     assert not facts.polarity_flip(nlp, "Python 3.0 was not backward compatible.",
                                    "Python 3.0 was not backward compatible with Python 2.")
+
+
+@pytest.mark.parametrize("claim, evidence", [
+    # 'X but not Y': the negation sits on the excluded argument, not on the verb
+    ("The Silver plan covers dental care and vision care.", "The Silver plan covers dental care but not vision care."),
+    ("The Silver plan covers vision care.", "The Silver plan covers dental care but not vision care."),
+    ("The store ships to the United States and to Canada.", "The store ships to the United States but not to Canada."),
+    ("The store ships to Canada.", "The store ships to the United States but not to Canada."),
+    ("The vaccine is approved for adults and for children.", "The vaccine is approved for adults but not for children."),
+    ("The vaccine is approved for children.", "The vaccine is approved for adults but not for children."),
+])
+def test_asserting_an_excluded_argument_is_a_flip(nlp, claim, evidence):
+    assert facts.polarity_flip(nlp, claim, evidence)
+    assert facts.polarity_flip(nlp, evidence, claim)
+
+
+@pytest.mark.parametrize("claim, evidence", [
+    # the claim keeps to what the evidence includes, or repeats the same exclusion
+    ("The Silver plan covers dental care.", "The Silver plan covers dental care but not vision care."),
+    ("The Silver plan covers dental care but not vision care.", "The Silver plan covers dental care but not vision care."),
+    ("The store ships to the United States.", "The store ships to the United States but not to Canada."),
+    ("The vaccine is approved for adults.", "The vaccine is approved for adults but not for children."),
+])
+def test_keeping_to_the_included_argument_is_not_a_flip(nlp, claim, evidence):
+    assert not facts.polarity_flip(nlp, claim, evidence)
 
 
 def test_negation_on_a_different_verb_is_not_a_flip(nlp):
@@ -212,8 +293,12 @@ def test_typographic_apostrophes_match_plain_ones(nlp, claim, source):
 def test_entity_must_match_whole_words(nlp):
     claim = facts.extract(nlp, "Ian Smith founded the company in 1998.")
     assert "'Ian Smith'" in facts.novel(claim, "brian smithson founded the company in 1998.")
-    # a demonym still grounds the place name
+    # a demonym still grounds the place name, in the plural too
     assert facts.mentioned("Europe", "european sales were flat.")
+    assert facts.mentioned("America", "most americans support it.")
+    assert facts.mentioned("Europe", "europeans")
+    assert facts.mentioned("Africa", "africans")
+    assert not facts.mentioned("Ian Smith", "ian smithsons")
 
 
 def test_person_counts_without_a_leading_title(nlp):
@@ -249,6 +334,83 @@ def test_date_with_the_same_month_in_other_words_is_grounded(nlp):
         assert facts.novel(facts.extract(nlp, claim), evidence) == []
 
 
+@pytest.mark.parametrize("claim, source", [
+    ("November 4, 2019", "the company completed the merger on 2019-11-04 after regulators approved it."),
+    ("July 1, 2021", "the updated remote work policy took effect on 2021-07-01."),
+    ("March 15, 2022", "the company announced the deal on 03/15/2022."),
+    ("November 2019", "the merger closed on 2019/11/04."),
+])
+def test_date_written_in_numbers_is_grounded(claim, source):
+    assert facts.grounded(claim, "DATE", source, facts.numbers(source))
+
+
+@pytest.mark.parametrize("claim, source", [
+    ("November 4, 2019", "the company completed the merger on 2019-04-11 after regulators approved it."),   # April 11
+    ("November 5, 2019", "the merger closed on 2019-11-04."),
+    ("November 4, 2020", "the merger closed on 2019-11-04."),
+])
+def test_date_written_in_numbers_must_match_exactly(claim, source):
+    assert not facts.grounded(claim, "DATE", source, facts.numbers(source))
+
+
+def test_numeric_date_is_no_date_mismatch(nlp):
+    claim = "The company completed the merger on November 4, 2019 after regulators approved it."
+    evidence = ["The company completed the merger on 2019-11-04 after regulators approved it."]
+    assert facts.conflicts(nlp, claim, facts.extract(nlp, claim), evidence, evidence[0].lower()) == []
+    swapped = ["The company completed the merger on 2019-04-11 after regulators approved it."]
+    out = facts.conflicts(nlp, claim, facts.extract(nlp, claim), swapped, swapped[0].lower())
+    assert any(r.startswith("DATE mismatch") for r in out)
+
+
+@pytest.mark.parametrize("ent, source, expected", [
+    # the modal 'may' and the verb 'march' are no months
+    ("May 2019", "in march 2019 the agency approved the drug, which may cause dizziness.", False),
+    ("March 2019", "in may 2019 the agency approved it, and protesters could march on.", False),
+    # a month word next to a number, or introduced as a date, still counts
+    ("May 2019", "in may 2019 the agency approved the drug.", True),
+    ("May 2019", "on 5 may 2019 the agency approved the drug.", True),
+    ("May 2019", "in may, the agency approved the 2019 plan.", True),
+    ("March 2019", "the agency approved it on march 3, 2019.", True),
+])
+def test_ambiguous_month_words_count_only_as_dates(ent, source, expected):
+    assert facts.grounded(ent, "DATE", source, facts.numbers(source)) is expected
+
+
+@pytest.mark.parametrize("text", ["The app has 5M users.", "The model has 3B parameters.", "Northwind employs 1.2K people."])
+def test_abbreviated_scale_is_read_the_same_in_the_source(nlp, text):
+    claim = facts.extract(nlp, text)
+    assert facts.novel(claim, text) == []
+    assert facts.novel(claim, text.lower()) == []       # the pipeline passes lower-cased source text
+
+
+def test_lower_case_metre_does_not_ground_millions_in_cased_source(nlp):
+    assert facts.novel(facts.extract(nlp, "The app has 5M users."), "The wall is 5m tall.") == ["5 million"]
+
+
+def test_ordinal_is_not_a_novel_fact(nlp):
+    source = "the drug lowers blood pressure in adults, according to a large trial."
+    for claim in ["First, the drug lowers blood pressure in adults.", "Third, the drug lowers blood pressure in adults.",
+                  "At first, the drug lowered blood pressure in adults."]:
+        assert facts.novel(facts.extract(nlp, claim), source) == []
+    # 'Fourth-quarter' is no checkable date on its own
+    found = facts.extract(nlp, "Fourth-quarter 2023 revenue was $412 million, up 8% from a year earlier.")
+    assert facts.novel(found, "q4 2023 revenue was $412 million, up 8% from q4 2022.") == []
+
+
+@pytest.mark.parametrize("text, expected", [
+    ("Revenue was $2,100 million.", "Revenue was $2100000000."),
+    ("Revenue was $2.1 billion.", "Revenue was $2100000000."),
+    ("The bridge is 1,280.5 meters long.", "The bridge is 1280.5 meters long."),
+    ("The tower has twenty-one floors.", "The tower has 21 floors."),
+    ("The app has 2.1B users.", "The app has 2100000000 users."),
+    ("She finished third.", "She finished 3rd."),
+    ("Margin changed by -3.2%.", "Margin changed by -3.2%."),
+    ("No numbers here.", "No numbers here."),
+])
+def test_canonical_numbers(text, expected):
+    assert facts.canonical_numbers(text) == expected
+
+
 def test_novel_facts_appear_in_no_source(nlp):
     source = "apollo 11 launched from kennedy space center on july 16, 1969."
     claim = facts.extract(nlp, "The landing site was chosen by 300 geologists at Stanford University.")
@@ -271,6 +433,34 @@ def test_relative_dates_are_not_checkable_facts(nlp):
     ("The Eiffel Tower is 330 meters tall.",
      "The Eiffel Tower, which is not the tallest structure in France, is 330 meters tall."),
     ("The restaurant was opened by Sean O’Brien in Dublin.", "The restaurant was opened by Sean O'Brien in Dublin."),
+    # K/M/B suffixes copied verbatim from the source
+    ("The messaging app now has 5M users across Europe.", "The messaging app now has 5M users across Europe."),
+    ("The model has 3B parameters.", "The model has 3B parameters."),
+    ("Northwind employs 1.2K people in its Ohio offices.", "Northwind employs 1.2K people in its Ohio offices."),
+    # ordinals are wording, not numbers to verify
+    ("First, the drug lowers blood pressure in adults.",
+     "The drug lowers blood pressure in adults, according to a large trial."),
+    ("Third, the drug lowers blood pressure in adults.",
+     "The drug lowers blood pressure in adults, according to a large trial."),
+    ("The drug was first approved in 2019.", "The drug was approved in 2019."),
+    ("Fourth-quarter 2023 revenue was $412 million, up 8% from a year earlier.",
+     "Q4 2023 revenue was $412 million, up 8% from Q4 2022."),
+    # a fall matches the source's signed percentage
+    ("Operating margin fell 3.2% year over year, according to the annual report.",
+     "Operating margin changed by -3.2% year over year, according to the annual report."),
+    ("Net income declined 12% in the third quarter.", "Net income changed by -12% in the third quarter."),
+    # dates the source writes in numbers
+    ("The updated remote work policy took effect on July 1, 2021.",
+     "The updated remote work policy took effect on 2021-07-01."),
+    ("The company announced the deal on March 15, 2022.", "The company announced the deal on 03/15/2022."),
+    ("The company completed the merger on November 4, 2019 after regulators approved it.",
+     "The company completed the merger on 2019-11-04 after regulators approved it."),
+    # a plural demonym grounds the place
+    ("A 2022 survey found that most people in America support paid family leave.",
+     "A 2022 survey found that most Americans support paid family leave."),
+    # compound number words
+    ("The ship carried one hundred twenty passengers.", "The ship carried 120 passengers."),
+    ("The ship carried one hundred and twenty passengers.", "The ship carried 120 passengers."),
 ])
 def test_true_claims_are_supported(detector_no_nli, claim, source):
     assert detector_no_nli.check_claim(claim, source).label == SUPPORTED
@@ -282,9 +472,31 @@ def test_true_claims_are_supported(detector_no_nli, claim, source):
      "The lowest recorded temperature in the town was 40 degrees Celsius."),
     ("The treaty was signed in March 2004.", "The treaty was signed in October 2004."),
     ("Ian Smith founded the company in 1998.", "Brian Smithson founded the company in 1998."),
+    # the agency approved it in March; 'which may cause' is no month
+    ("The agency approved the drug in May 2019.",
+     "In March 2019 the agency approved the drug, which may cause dizziness."),
 ])
 def test_false_claims_are_caught(detector_no_nli, claim, source):
     assert detector_no_nli.check_claim(claim, source).label in (CONTRADICTED, FABRICATED)
+
+
+@pytest.mark.parametrize("response, source", [
+    ("Today the plant employs 300 workers in total.",
+     "The plant opened in 1998 with 300 workers. Today the plant employs 1,500 people in total."),
+    ("The company has 500 people.", "The company has 450 employees."),
+    ("Sales reached 3.2 million units.", "Sales reached 2.9 million."),
+    ("The factory has 1,500 workers.", "The factory has 1800 workers."),
+    ("She ranked third in the race.", "She ranked fifth in the race."),
+    ("Operating margin rose 3.2% year over year, according to the annual report.",
+     "Operating margin changed by -3.2% year over year, according to the annual report."),
+    ("The company completed the merger on November 4, 2019 after regulators approved it.",
+     "The company completed the merger on 2019-04-11 after regulators approved it."),
+    ("The Silver plan covers dental care and vision care.", "The Silver plan covers dental care but not vision care."),
+    ("The store ships to the United States and to Canada.", "The store ships to the United States but not to Canada."),
+    ("The vaccine is approved for adults and for children.", "The vaccine is approved for adults but not for children."),
+])
+def test_conflicting_claims_are_contradicted_without_nli(detector_no_nli, response, source):
+    assert detector_no_nli.detect(response, source).verdicts[0].label == CONTRADICTED
 
 
 @pytest.mark.parametrize("claim, evidence, expected", [
@@ -297,3 +509,17 @@ def test_false_claims_are_caught(detector_no_nli, claim, source):
 ])
 def test_same_values_other_notation(claim, evidence, expected):
     assert facts.same_values_other_notation(claim, evidence) is expected
+
+
+@pytest.mark.parametrize("claim, evidence, flipped", [
+    ("The company did not cut jobs in 2023.", "In 2023 the company did not raise prices or cut jobs.", False),
+    ("The museum can't be photographed on Mondays.", "The museum can't be visited or photographed on Mondays.", False),
+    ("Patients should not operate machinery.", "Patients should not drive or operate machinery.", False),
+    ("The company cut jobs in 2023.", "In 2023 the company did not raise prices or cut jobs.", True),
+    ("The museum can be photographed on Mondays.", "The museum can't be visited or photographed on Mondays.", True),
+    # 'and' does not carry the negation to the second verb
+    ("People with type 1 diabetes require insulin therapy.",
+     "People with type 1 diabetes do not produce enough insulin and require insulin therapy.", False),
+])
+def test_negation_shared_through_or_covers_every_verb(nlp, claim, evidence, flipped):
+    assert facts.polarity_flip(nlp, claim, evidence) is flipped

@@ -6,7 +6,8 @@ import pytest
 from hallucination_detector import (
     CONTRADICTED, FABRICATED, SUPPORTED, UNSUPPORTED, HallucinationDetector,
 )
-from hallucination_detector.pipeline import _looks_english
+from hallucination_detector.config import Config
+from hallucination_detector.pipeline import _digit_numbers, _looks_english
 from hallucination_detector.schemas import SourceDocument
 
 MISSION = {"id": "mission", "title": "Mission summary",
@@ -119,6 +120,37 @@ def test_sources_that_disagree_with_each_other_raise_a_warning(request, fixture)
     assert report.warnings == ["sources conflict on claim 1: 'encyclopedia' and 'blog' disagree with each other"]
 
 
+@pytest.mark.parametrize("text, expected", [
+    ("$4.5 billion", {4.5e9}), ("$4.5B", {4.5e9}), ("1.2 million people", {1.2e6}), ("3.2 thousand", {3200}),
+    ("two thousand people", set()), ("3 million and two thousand", {3e6}), ("two Canadian researchers", set()),
+])
+def test_digit_numbers_keep_their_scale_word(text, expected):
+    assert _digit_numbers(text) == expected
+
+
+SCALE_CLAIM = "Acme reported full-year revenue of $4.5 billion in 2025."
+
+
+def test_sources_that_differ_in_scale_word_raise_a_warning(detector_no_nli):
+    # '$4.5 billion' and '$4.5 million' were both read as 4.5, so the conflict went unnoticed
+    docs = [{"id": "press", "text": SCALE_CLAIM}, {"id": "blog", "text": SCALE_CLAIM.replace("billion", "million")}]
+    report = detector_no_nli.detect(SCALE_CLAIM, docs)
+    assert report.warnings == ["sources conflict on claim 1: 'press' supports it, 'blog' contradicts it"]
+
+
+@pytest.mark.parametrize("fixture", ["detector", "detector_no_nli"])
+@pytest.mark.parametrize("claim, census, atlas", [
+    ("The city had 1.2 million people in 2020.", "The city had 1.2 million people in 2020.",
+     "The city had 1,200,000 people in 2020."),
+    ("Acme reported revenue of $1.62 billion in 2025.", "Acme reported revenue of $1.62 billion in 2025.",
+     "Acme reported revenue of $1,620 million in 2025."),
+])
+def test_sources_agreeing_in_other_notation_are_no_conflict(request, fixture, claim, census, atlas):
+    docs = [{"id": "census", "text": census}, {"id": "atlas", "text": atlas}]
+    report = request.getfixturevalue(fixture).detect(claim, docs)
+    assert not any("sources conflict" in w for w in report.warnings)
+
+
 def test_fact_spread_over_two_sentences(detector, monkeypatch):
     source = "Marie Curie was born in 1867. She was born in Warsaw, Poland."
     claim = "Marie Curie was born in Warsaw in 1867."
@@ -182,9 +214,47 @@ def test_non_english_response_is_flagged_not_scored(detector, apollo, response):
     "Apple Inc. CEO Tim Cook announced iPhone 15 Pro Max pricing.",
     "Q3 revenue rose 14% to $412M; EPS $1.32 vs $1.10.",
     "Angela Merkel, Emmanuel Macron, Pedro Sánchez and Giorgia Meloni met in Brussels on 12 March 2023.",
+    # function words inside titles and names are not the language of the answer
+    "Gabriel García Márquez wrote Cien años de soledad and El amor en los tiempos del cólera.",
+    "Victor Hugo wrote Les Misérables and Notre-Dame de Paris. Albert Camus wrote L'Étranger and La Peste. "
+    "Antoine de Saint-Exupéry wrote Le Petit Prince.",
+    "La La Land won six Oscars.",
+    "Antoine de Saint-Exupéry wrote Le Petit Prince.",
+    "Simone de Beauvoir wrote Le Deuxième Sexe in 1949.",
+    "Leonardo da Vinci painted La Gioconda.",
+    "Johann Wolfgang von Goethe wrote Die Leiden des jungen Werthers.",
+    "Antoine de Saint-Exupéry wrote Vol de nuit.",
+    'Márquez wrote "Cien años de soledad" in 1967.',
 ])
 def test_english_with_names_numbers_or_accents_counts_as_english(text):
     assert _looks_english(text)
+
+
+@pytest.mark.parametrize("text", [
+    "Marie Curie nació en Varsovia en 1867.",
+    "La Torre Eiffel fue construida en 1889.",
+    "Le Petit Prince est un livre de Saint-Exupéry.",
+    "Die Mission startete vom Kennedy Space Center und landete im Meer der Ruhe.",
+])
+def test_other_language_that_starts_with_a_name_or_title_is_not_english(text):
+    assert not _looks_english(text)
+
+
+def test_english_response_naming_spanish_works_is_scored(detector_no_nli):
+    response = "Gabriel García Márquez wrote Cien años de soledad and El amor en los tiempos del cólera."
+    source = "Gabriel García Márquez wrote Cien años de soledad (1967) and El amor en los tiempos del cólera (1985)."
+    report = detector_no_nli.detect(response, [source])
+    assert not report.unscorable and report.verdicts and report.reliability_score == 100.0
+
+
+def test_language_check_reads_its_limits_from_the_config():
+    text = "Marie Curie nació en Varsovia en 1867."                    # 2 Spanish function words, 0 English
+    assert not _looks_english(text)
+    assert _looks_english(text, Config(min_foreign_function_words=3))
+    korean = "아폴로 11호는 1969년 발사"
+    assert not _looks_english(korean)
+    assert _looks_english(korean, Config(min_non_ascii_letters=20))
+    assert _looks_english(korean, Config(min_ascii_letter_ratio=0.0))
 
 
 # ---------------------------------------------------------------- claim handling inside detect()
@@ -249,3 +319,10 @@ def test_different_amount_is_still_contradicted(detector):
     verdict = detector.check_claim("The company reported revenue of $3.1 billion for the year.",
                                    "The company reported revenue of $2.1 billion for the year.")
     assert verdict.label == CONTRADICTED
+
+
+def test_scale_suffix_in_a_verbatim_claim_is_grounded(detector_no_nli):
+    """'5M' (5 million) must not be read differently in the claim and in the cased source text."""
+    source = "The app reached 5M users in 2024, up from 2.4M a year earlier."
+    verdict = detector_no_nli.check_claim("The app reached 5M users in 2024.", source)
+    assert verdict.label == SUPPORTED

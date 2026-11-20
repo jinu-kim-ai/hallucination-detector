@@ -2,7 +2,7 @@ import dataclasses
 
 import pytest
 
-from hallucination_detector import Config
+from hallucination_detector import Config, HallucinationDetector
 from hallucination_detector.config import V1, V1_NLI
 from hallucination_detector.sources import MAX_SENTENCE_WORDS, MIN_SOURCE_WORDS
 
@@ -26,6 +26,16 @@ def test_defaults_and_presets_are_valid():
     ({"related_threshold": "0.5"}, "related_threshold"),
     ({"related_threshold": 0.8}, "related_threshold .* contradiction_threshold"),
     ({"contradiction_threshold": 0.3}, "related_threshold .* contradiction_threshold"),
+    # SUPPORTED by similarity alone, yet below the citation bar: a supported claim with no evidence shown
+    ({"support_threshold": 0.4}, "support_threshold .* related_threshold"),
+    ({"related_threshold": 0.7, "support_threshold": 0.6}, "support_threshold .* related_threshold"),
+    ({"min_non_ascii_letters": 0}, "min_non_ascii_letters"),
+    ({"min_ascii_letter_ratio": 1.5}, "min_ascii_letter_ratio"),
+    ({"min_foreign_function_words": 0}, "min_foreign_function_words"),
+    ({"min_foreign_function_words": 2.5}, "min_foreign_function_words"),
+    ({"foreign_to_english_ratio": -1}, "foreign_to_english_ratio"),
+    ({"foreign_to_english_ratio": float("nan")}, "foreign_to_english_ratio"),
+    ({"foreign_to_english_ratio": "2"}, "foreign_to_english_ratio"),
 ])
 def test_invalid_values_are_rejected_on_construction(overrides, message):
     with pytest.raises(ValueError, match=message):
@@ -39,6 +49,18 @@ def test_replace_validates_too():
 
 def test_edge_values_are_allowed():
     Config(related_threshold=0.0, support_threshold=1.0, contradiction_threshold=0.45, nli_context_sentences=0)
+    Config(related_threshold=0.6, support_threshold=0.6)
+
+
+def test_language_check_limits_live_in_config():
+    c = Config()
+    assert (c.min_non_ascii_letters, c.min_ascii_letter_ratio) == (3, 0.70)
+    assert (c.min_foreign_function_words, c.foreign_to_english_ratio) == (2, 2.0)
+
+
+def test_detector_rejects_support_below_related():
+    with pytest.raises(ValueError, match="support_threshold"):
+        HallucinationDetector(use_nli=False, related_threshold=0.7, support_threshold=0.6)
 
 
 def test_source_splitting_limits_live_in_config():

@@ -9,14 +9,21 @@ A design and implementation plan for a modular hallucination detector. Given an 
 
 ## Status: implemented
 
-All 22 checklist steps are done; results are in the README. Four things turned out differently from the plan below:
+All 22 checklist steps are done; results are in the README. Six things turned out differently from the plan below:
 
 1. **Neighbor sentences in the NLI premise are off by default.** On the development set they caused 2 extra errors, so `nli_context_sentences` defaults to 0. The option remains in `config.py`.
 2. **Only the best sentence can contradict a claim.** The plan let any cited sentence contradict. In practice a sentence about a different fact (the 1903 Physics prize) contradicted a true claim about the 1911 Chemistry prize. Entailment may still come from any cited sentence.
 3. **Over-long source sentences are split at commas and semicolons with a warning**, rather than at parsed clause boundaries.
 4. **Multi-document claims went into the held-out set, not the development set**, so the development numbers stay comparable with v1. The conflicting-sources case is covered by a test (`tests/test_pipeline.py`) rather than a labeled data row, because its correct label is ambiguous by design. The units row in section 4 is a documented limit without a test.
 
+5. **Hedged sentences are checked, not dropped.** Section 4 said hedges are dropped. A hedge does not make a false statement true: "I think Apollo 11 launched in 1970" still states a wrong year. Only questions and pleasantries ("I hope this helps!") are dropped. A discourse opener ("Overall,", "In summary,", "Sure,") is cut off and the rest of the sentence is checked.
+6. **Uncited claims still report their closest match.** Section 3 says a claim with no related evidence has an empty `citations` list, and it does. The similarity of the closest sentence is kept in a new `best_similarity` field, so an `UNSUPPORTED` verdict can still be explained.
+
 Step 5 was verified exactly: after the restructure, every one of the 50 development claims received the same label, confidence and similarity as in v1, with and without NLI. The held-out set (step 20) was scored once and its errors were left unfixed.
+
+### Review and fix rounds
+
+After v2 shipped, the code was audited against this plan by six parallel reviewers. Each reported defect was reproduced, then confirmed by an independent skeptic: 56 defects across every module. Five fixers repaired them in parallel, in isolated worktrees, one module group each. A second review of the merged fixes found 23 new defects introduced by the fixes themselves, and a second round fixed those. Every fix has a regression test. The sample cases in `examples/cases/` were written during this audit; they are realistic factual and hallucinated answers with hand-assigned labels, used to find and measure false alarms.
 
 The rest of this document is the plan as written before implementation.
 

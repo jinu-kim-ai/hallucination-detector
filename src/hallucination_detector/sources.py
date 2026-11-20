@@ -28,22 +28,30 @@ def as_documents(sources) -> list[SourceDocument]:
 
 
 def _given_id(source) -> str | None:
+    """The caller's id, or None when it is missing or blank (a 'source-N' id is generated then)."""
     if isinstance(source, SourceDocument):
-        return source.id
-    if isinstance(source, dict) and source.get("id") is not None and str(source["id"]) != "":
-        return str(source["id"])          # str() keeps a falsy id such as 0
-    return None
+        given = source.id
+    elif isinstance(source, dict):
+        given = source.get("id")
+    else:
+        return None
+    if given is None or str(given) == "":
+        return None
+    return str(given)                     # str() keeps a falsy id such as 0
 
 
 def _as_document(source, position: int, taken: set[str]) -> SourceDocument:
-    doc_id = _given_id(source) or _free_id(f"source-{position}", taken)
+    doc_id = _given_id(source)
+    if doc_id is None:
+        doc_id = _free_id(f"source-{position}", taken)
+    # every form gets the same checks: a SourceDocument with text=None is blank, not a crash later
     if isinstance(source, SourceDocument):
-        _check_text(source.text, doc_id, "text")
-        return source
-    if isinstance(source, dict):
-        return SourceDocument(doc_id, _check_text(source.get("text"), doc_id, "text"),
-                              _check_text(source.get("title"), doc_id, "title"))
-    return SourceDocument(doc_id, _check_text(source, doc_id, "text"))
+        text, title = source.text, source.title
+    elif isinstance(source, dict):
+        text, title = source.get("text"), source.get("title")
+    else:
+        text, title = source, None
+    return SourceDocument(doc_id, _check_text(text, doc_id, "text"), _check_text(title, doc_id, "title"))
 
 
 def _check_text(value, doc_id: str, field: str) -> str:
@@ -66,7 +74,7 @@ def _free_id(base: str, taken: set[str]) -> str:
 def load_request(path: str | Path) -> tuple[str, list[SourceDocument]]:
     """Read {"response": ..., "sources": [{"id", "title", "text"}, ...]} from a JSON file."""
     try:
-        data = json.loads(_read_text(Path(path)))
+        data = json.loads(read_text(path))
     except json.JSONDecodeError as exc:
         raise ValueError(f"{path}: not valid JSON ({exc})") from exc
     if not isinstance(data, dict):
@@ -88,13 +96,14 @@ def load_text_sources(paths: list[str | Path]) -> list[SourceDocument]:
     docs, used = [], set()
     for p in map(Path, paths):
         doc_id = _free_id(p.name if p.name not in used else str(p), used)
-        docs.append(SourceDocument(doc_id, _read_text(p)))
+        docs.append(SourceDocument(doc_id, read_text(p)))
     return docs
 
 
-def _read_text(path: Path) -> str:
+def read_text(path: str | Path) -> str:
+    """A text file exactly as written: spans computed on the result index the file itself."""
     # utf-8-sig drops a BOM (PowerShell and Notepad write one); newline="" keeps \r\n so spans index the real file
-    with path.open(encoding="utf-8-sig", newline="") as fh:
+    with Path(path).open(encoding="utf-8-sig", newline="") as fh:
         return fh.read()
 
 
