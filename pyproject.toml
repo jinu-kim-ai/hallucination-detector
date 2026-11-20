@@ -8,6 +8,7 @@ version = "2.0.0"
 description = "Claim-level hallucination detection for LLM responses, with a reliability score and citations."
 readme = "README.md"
 requires-python = ">=3.10"
+keywords = ["hallucination-detection", "llm-evaluation", "nlp", "fact-checking", "nli", "rag"]
 dependencies = [
     "numpy>=1.26",
     "spacy>=3.7",
@@ -16,7 +17,10 @@ dependencies = [
 
 [project.optional-dependencies]
 app = ["streamlit>=1.40", "pandas>=2.0"]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "streamlit>=1.40", "pandas>=2.0"]     # the test suite also drives the Streamlit app
+
+[project.urls]
+Repository = "https://github.com/jinu-kim-ai/hallucination-detector"
 
 [project.scripts]
 hallucheck = "hallucination_detector.cli:main"

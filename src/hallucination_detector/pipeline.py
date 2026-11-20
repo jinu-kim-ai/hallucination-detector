@@ -42,7 +42,7 @@ class HallucinationDetector:
         """`overrides` are Config fields, e.g. HallucinationDetector(use_nli=False, support_threshold=0.6)."""
         self.config = replace(config or Config(), **overrides)
         self.nlp = nlp or load_nlp(self.config.spacy_model)
-        self.extractor = ClaimExtractor(self.nlp, self.config.min_claim_words)
+        self.extractor = ClaimExtractor(self.nlp, self.config.min_claim_words, self.config.max_sentence_words)
         self.retriever = Retriever(get_embedder(self.config.embedder), self.config.cache_size)
         self._nli = None
         # Split documents kept per detector. A long-running service reuses one detector with ever new
@@ -60,6 +60,8 @@ class HallucinationDetector:
     # ------------------------------------------------------------------ public API
     def detect(self, response: str, sources) -> Report:
         """Check every claim in `response` against `sources` (a string, or a list of strings / dicts / documents)."""
+        if not isinstance(response, str):
+            raise TypeError(f"response must be a string, got {type(response).__name__}")
         docs = as_documents(sources)
         index, warnings = self._index(docs)
         report = Report(response, [], docs, warnings, self.config.public())
@@ -73,6 +75,10 @@ class HallucinationDetector:
         if not claims:
             report.warnings.append("no checkable claims found in the response")
             return report
+        limit = self.config.max_sentence_words
+        run_ons = {c.sentence for c in claims if len(c.sentence.split()) > limit}
+        if run_ons:
+            report.warnings.append(f"{len(run_ons)} response sentence(s) of over {limit} words were checked in parts")
 
         by_id: dict[int, ClaimVerdict] = {}
         for claim in claims:
@@ -89,6 +95,8 @@ class HallucinationDetector:
 
     def check_claim(self, claim: str, sources) -> ClaimVerdict:
         """Check one already-written claim (used by the evaluation harness)."""
+        if not isinstance(claim, str):
+            raise TypeError(f"claim must be a string, got {type(claim).__name__}")
         index, _ = self._index(as_documents(sources))
         return self._check(Claim(1, claim, claim, 0, len(claim)), index, [])
 
@@ -98,7 +106,9 @@ class HallucinationDetector:
         per_document = []
         for doc in docs:
             sentences, doc_warnings = self._split(doc)
-            warnings += doc_warnings
+            for warning in doc_warnings:
+                if warning not in warnings:                 # one long document can raise the same note many times
+                    warnings.append(warning)
             per_document.append((doc.text, sentences))
         index = self.retriever.index(per_document)
         if not index.sentences:
@@ -175,7 +185,7 @@ class HallucinationDetector:
             reasons.append(f"unresolved pronoun: '{pronoun}' may mean {claim.pronoun_referent or 'the earlier subject'}"
                            f" or {claim.pronoun_rival or 'someone else'}, and the supporting evidence is not clearly about the first")
         self._warn_if_sources_conflict(claim, citations, premises, warnings)
-        # PLAN section 3: cite only sentences that are actually evidence. With none, the list is empty
+        # Cite only sentences that are actually evidence. With none, the list is empty
         # and the best similarity is still given in the reasons.
         return ClaimVerdict(claim, label, round(confidence, 3), reasons, related, best_sim)
 

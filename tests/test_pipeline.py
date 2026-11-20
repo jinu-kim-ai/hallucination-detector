@@ -1,4 +1,4 @@
-"""End-to-end behaviour, including the edge cases listed in PLAN.md section 4."""
+"""End-to-end behaviour: the four labels, multiple documents, citations, and degenerate input."""
 from dataclasses import replace
 
 import pytest
@@ -46,7 +46,7 @@ def test_unsupported_opinion(detector, apollo):
 
 
 def test_claim_without_related_evidence_cites_nothing(detector, apollo):
-    # PLAN section 3: an unrelated best sentence is not evidence, but its similarity is still reported
+    # an unrelated best sentence is not evidence, but its similarity is still reported
     v = detector.detect("The crew felt nervous.", apollo).verdicts[0]
     assert v.label == UNSUPPORTED and v.citations == []
     assert v.reasons[0].startswith("best evidence similarity 0.")

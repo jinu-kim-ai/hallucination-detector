@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from .models import load_pretrained
+
 LABELS = ["contradiction", "entailment", "neutral"]     # output order of the cross-encoder/nli-* models
 
 
@@ -10,7 +12,7 @@ class NLIScorer:
     def __init__(self, model_name: str = "cross-encoder/nli-deberta-v3-xsmall"):
         from sentence_transformers import CrossEncoder
 
-        self.model = CrossEncoder(model_name)
+        self.model = load_pretrained(CrossEncoder, model_name, "NLI")
         self.name = model_name
 
     def score(self, pairs: list[tuple[str, str]]) -> list[dict[str, float]]:

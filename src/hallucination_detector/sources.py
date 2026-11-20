@@ -5,6 +5,7 @@ import json
 import re
 from pathlib import Path
 
+from .chunking import chunks as _chunks, parse_limit, split_long, trim as _trim
 from .config import Config
 from .schemas import Sentence, SourceDocument
 
@@ -18,6 +19,9 @@ def as_documents(sources) -> list[SourceDocument]:
         return []
     if isinstance(sources, (str, SourceDocument, dict)):
         sources = [sources]
+    if isinstance(sources, (bytes, bytearray)) or not hasattr(sources, "__iter__"):
+        raise TypeError("sources must be a string, a dict, a SourceDocument, or a list of them, "
+                        f"got {type(sources).__name__}")
     sources = list(sources)
     given = [g for g in map(_given_id, sources) if g is not None]
     duplicates = sorted({g for g in given if given.count(g) > 1})
@@ -132,35 +136,11 @@ def split_sentences(doc: SourceDocument, nlp, min_words: int = MIN_SOURCE_WORDS,
 
 
 def _sentence_bounds(text: str, nlp) -> list[tuple[int, int]]:
-    """spaCy sentence spans; text over nlp.max_length is parsed in chunks, offsets shifted back into `text`."""
+    """spaCy sentence spans; long text is parsed in chunks (chunking.parse_limit), offsets shifted back."""
     bounds = []
-    for offset, chunk in _chunks(text, getattr(nlp, "max_length", 1_000_000)):
+    for offset, chunk in _chunks(text, parse_limit(nlp)):
         bounds.extend((offset + s.start_char, offset + s.end_char) for s in nlp(chunk).sents)
     return bounds
-
-
-def _chunks(text: str, limit: int) -> list[tuple[int, str]]:
-    """(offset, chunk) pieces of at most `limit` characters, cut at the best boundary available."""
-    out, start = [], 0
-    while len(text) - start > limit:
-        cut = _cut_point(text, start, start + limit)
-        out.append((start, text[start:cut]))
-        start = cut
-    out.append((start, text[start:]))
-    return out
-
-
-def _cut_point(text: str, lo: int, hi: int) -> int:
-    """Last paragraph break, line break, sentence end or space in the back half of text[lo:hi]."""
-    mid = lo + (hi - lo) // 2                       # cutting in the back half keeps the chunk count linear
-    window = text[mid:hi]
-    for pattern in (r"\n\s*\n", r"\n", r"[.!?][\"')\]]*\s", r"\s"):
-        last = None
-        for last in re.finditer(pattern, window):
-            pass
-        if last is not None:
-            return mid + last.end()
-    return hi                                       # one enormous token: a hard cut is all that is left
 
 
 def _group_short(text: str, spans: list[tuple[int, int]], max_words: int) -> list[tuple[int, int]]:
@@ -179,23 +159,5 @@ def _group_short(text: str, spans: list[tuple[int, int]], max_words: int) -> lis
     return groups
 
 
-def _trim(text: str, start: int, end: int) -> tuple[int, int]:
-    while start < end and text[start].isspace():
-        start += 1
-    while end > start and text[end - 1].isspace():
-        end -= 1
-    return start, end
-
-
 def _split_long(text: str, start: int, end: int, max_words: int = MAX_SENTENCE_WORDS) -> list[tuple[int, int]]:
-    """Cut an over-long sentence at semicolons / commas into pieces of at most `max_words` words."""
-    pieces, piece_start, words = [], start, 0
-    for m in re.finditer(r"\S+", text[start:end]):
-        words += 1
-        token_end = start + m.end()
-        if words >= max_words // 2 and m.group().endswith((";", ",")) or words >= max_words:
-            pieces.append(_trim(text, piece_start, token_end))
-            piece_start, words = token_end, 0
-    if piece_start < end and text[piece_start:end].strip():
-        pieces.append(_trim(text, piece_start, end))
-    return pieces
+    return split_long(text, start, end, max_words)

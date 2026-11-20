@@ -1,4 +1,4 @@
-"""Behaviour that deliberately differs from the original PLAN.md (see its "Status" section)."""
+"""Two deliberate design decisions, pinned so they are not undone by accident."""
 import pytest
 
 from hallucination_detector import CONTRADICTED, ClaimExtractor
@@ -9,7 +9,7 @@ from hallucination_detector import CONTRADICTED, ClaimExtractor
     ("Apollo 11 might have launched from Florida.", "Apollo 11 might have launched from Florida."),
 ])
 def test_hedged_sentences_are_claims(nlp, response, claim):
-    """Decision 5: a hedge does not make a false statement true, so it is checked rather than dropped."""
+    """A hedge does not make a false statement true, so a hedged sentence is checked rather than dropped."""
     assert [c.text for c in ClaimExtractor(nlp).extract(response)] == [claim]
 
 
@@ -25,7 +25,7 @@ def test_questions_and_pleasantries_are_still_dropped(nlp):
 
 
 def test_uncited_claim_reports_its_closest_match(detector, apollo):
-    """Decision 6: no citation below the related threshold, but the closest similarity is kept."""
+    """No citation below the related threshold, but the closest similarity is still reported."""
     verdict = detector.detect("The astronauts felt very nervous during the descent.", apollo).verdicts[0]
     data = verdict.to_dict()
     assert data["citations"] == [] and 0 < data["best_similarity"] < detector.config.related_threshold

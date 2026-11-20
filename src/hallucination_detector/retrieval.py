@@ -10,6 +10,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from .config import Config
+from .models import load_pretrained
 from .schemas import Sentence
 
 
@@ -19,7 +20,7 @@ class SentenceTransformerEmbedder:
     def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
         from sentence_transformers import SentenceTransformer
 
-        self.model = SentenceTransformer(model_name)
+        self.model = load_pretrained(SentenceTransformer, model_name, "embedding")
         self.name = model_name
 
     def encode(self, texts: list[str]) -> np.ndarray:

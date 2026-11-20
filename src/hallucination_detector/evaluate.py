@@ -61,10 +61,44 @@ class BinaryMetrics:
 
 
 def load_dataset(data_dir: str | Path) -> tuple[dict[str, str], list[dict]]:
+    """Read and validate a dataset directory. Every problem is a ValueError that names the file and line."""
     data_dir = Path(data_dir)
-    sources = json.loads((data_dir / "sources.json").read_text(encoding="utf-8-sig"))
-    lines = (data_dir / "labeled_claims.jsonl").read_text(encoding="utf-8-sig").splitlines()
-    return sources, [json.loads(line) for line in lines if line.strip()]
+    sources_path, claims_path = data_dir / "sources.json", data_dir / "labeled_claims.jsonl"
+    try:
+        sources = json.loads(sources_path.read_text(encoding="utf-8-sig"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{sources_path}: not valid JSON ({exc})") from exc
+    if not isinstance(sources, dict) or not all(isinstance(v, str) for v in sources.values()):
+        raise ValueError(f"{sources_path}: expected an object mapping source ids to document text")
+
+    rows = []
+    for number, line in enumerate(claims_path.read_text(encoding="utf-8-sig").splitlines(), 1):
+        if not line.strip():
+            continue
+        where = f"{claims_path}:{number}"
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"{where}: not valid JSON ({exc})") from exc
+        if not isinstance(row, dict):
+            raise ValueError(f"{where}: expected a JSON object")
+        missing = [k for k in ("id", "domain", "claim", "label") if k not in row]
+        if missing:
+            raise ValueError(f"{where}: missing field(s) {missing}")
+        if not isinstance(row["claim"], str):
+            raise ValueError(f"{where}: 'claim' must be a string")
+        if row["label"] not in LABELS:
+            raise ValueError(f"{where}: unknown label {row['label']!r}; use one of {LABELS}")
+        ids = row.get("source_ids") or ([row["source_id"]] if "source_id" in row else [])
+        if not ids or not isinstance(ids, list):
+            raise ValueError(f"{where}: needs 'source_id' or a non-empty 'source_ids' list")
+        unknown = [i for i in ids if i not in sources]
+        if unknown:
+            raise ValueError(f"{where}: unknown source id(s) {unknown}; {sources_path.name} has {sorted(sources)}")
+        rows.append(row)
+    if not rows:
+        raise ValueError(f"{claims_path}: no labeled claims")
+    return sources, rows
 
 
 def predict_all(detector: HallucinationDetector, sources: dict[str, str], rows: list[dict]) -> list[dict]:

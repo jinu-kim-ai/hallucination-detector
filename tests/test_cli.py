@@ -191,3 +191,75 @@ def test_app_gives_blank_ids_a_unique_default(app):
     app.button[0].click().run()
     assert not app.exception and not app.error
     assert app.metric[0].label == "Reliability score"
+
+
+# ---------------------------------------------------------------------- models
+def test_download_command_loads_every_model(capsys):
+    assert main(["download"]) == 0
+    out = capsys.readouterr().out
+    for name in ("en_core_web_sm", "all-MiniLM-L6-v2", "cross-encoder/nli-deberta-v3-xsmall"):
+        assert f"'{name}'" in out
+    assert out.count("ready") == 4 and "need no network" in out
+
+
+def test_download_command_respects_the_light_setup(capsys):
+    assert main(["--no-nli", "--embedder", "hashing", "download"]) == 0
+    out = capsys.readouterr().out
+    assert "en_core_web_sm" in out and "NLI" not in out and "embedding" not in out
+
+
+def test_download_installs_a_missing_spacy_model(monkeypatch):
+    from hallucination_detector import cli
+    from hallucination_detector.models import ModelLoadError
+
+    calls = []
+
+    def fake_load(name):
+        calls.append(("load", name))
+        if ("install", name) not in calls:
+            raise ModelLoadError("not installed")
+        return "nlp"
+
+    monkeypatch.setattr(cli, "load_spacy", fake_load)
+    monkeypatch.setattr("spacy.cli.download", lambda name: calls.append(("install", name)))
+    assert cli._install_spacy_model("en_core_web_sm") == "nlp"
+    assert calls == [("load", "en_core_web_sm"), ("install", "en_core_web_sm"), ("load", "en_core_web_sm")]
+
+
+def test_failed_spacy_install_is_a_clear_error(monkeypatch):
+    from hallucination_detector import cli
+    from hallucination_detector.models import ModelLoadError
+
+    def not_installed(name):
+        raise ModelLoadError("not installed")
+
+    def pip_fails(name):
+        raise SystemExit(1)
+
+    monkeypatch.setattr(cli, "load_spacy", not_installed)
+    monkeypatch.setattr("spacy.cli.download", pip_fails)
+    with pytest.raises(ModelLoadError, match="could not install the spaCy model 'nope'"):
+        cli._install_spacy_model("nope")
+
+
+def test_model_that_cannot_be_loaded_is_a_one_line_error(tmp_path, capsys, monkeypatch):
+    from hallucination_detector import retrieval
+    from hallucination_detector.models import ModelLoadError
+
+    def broken(name):
+        raise ModelLoadError(f"could not load the embedding model '{name}': download failed")
+
+    monkeypatch.setattr(retrieval, "SentenceTransformerEmbedder", broken)
+    request = _request(tmp_path, {"response": CLAIM, "sources": []})
+    assert main(["--no-nli", "--embedder", "some/model", "detect", "--request", str(request)]) == 2
+    assert "could not load the embedding model 'some/model'" in _one_line_error(capsys)
+
+
+def test_missing_spacy_model_is_a_one_line_error(tmp_path, capsys, monkeypatch):
+    from hallucination_detector import pipeline
+    from hallucination_detector.models import load_spacy
+
+    monkeypatch.setattr(pipeline, "load_nlp", lambda name: load_spacy("en_core_web_nope"))
+    request = _request(tmp_path, {"response": CLAIM, "sources": []})
+    assert main(["--no-nli", "--embedder", "hashing", "detect", "--request", str(request)]) == 2
+    assert "python -m spacy download en_core_web_nope" in _one_line_error(capsys)

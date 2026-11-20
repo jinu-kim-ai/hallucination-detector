@@ -9,6 +9,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from hallucination_detector import Config, HallucinationDetector
+from hallucination_detector.models import ModelLoadError
 from hallucination_detector.report import display_reasons, to_html, to_json
 from hallucination_detector.schemas import ClaimVerdict
 
@@ -87,6 +88,9 @@ if st.button("Check response", type="primary"):
     try:
         with st.spinner("Checking claims..."):
             report = load_detector(use_nli, support).detect(response, sources)
+    except ModelLoadError as e:                     # a model is missing and could not be downloaded
+        st.error(f"Could not load the models: {e}")
+        st.stop()
     except ValueError as e:                         # anything else the library rejects as input
         st.error(f"Could not check this input: {e}")
         st.stop()

@@ -18,6 +18,9 @@ from __future__ import annotations
 import re
 from typing import NamedTuple
 
+from .chunking import chunks, parse_limit, split_long
+from .config import Config
+from .models import load_spacy
 from .schemas import Claim
 
 # A pleasantry drops its whole sentence; an opener is only cut off, so the fact after it is still checked.
@@ -57,13 +60,8 @@ _CALENDAR_NAMES = frozenset(
     "monday tuesday wednesday thursday friday saturday sunday mon tue tues wed thu thur thurs fri sat sun".split())
 
 
-def load_nlp(model: str = "en_core_web_sm"):
-    import spacy
-
-    try:
-        return spacy.load(model)
-    except OSError as exc:  # model not downloaded
-        raise RuntimeError(f"spaCy model '{model}' is missing. Run: python -m spacy download {model}") from exc
+def load_nlp(model: str = Config.spacy_model):
+    return load_spacy(model)
 
 
 class _Piece(NamedTuple):
@@ -77,45 +75,78 @@ class _Piece(NamedTuple):
 
 
 class ClaimExtractor:
-    def __init__(self, nlp=None, min_words: int = 3):
+    def __init__(self, nlp=None, min_words: int = Config.min_claim_words,
+                 max_sentence_words: int = Config.max_sentence_words):
         self.nlp = nlp or load_nlp()
         self.min_words = min_words
+        self.max_sentence_words = max_sentence_words
+
+    def _sentences(self, clean: str):
+        """(offset of the parsed text in `clean`, sentence) pairs. Long blocks are parsed in chunks, which keeps
+        memory bounded and stays under spaCy's length limit."""
+        limit = parse_limit(self.nlp)
+        for block_start, block_end in _blocks(clean):
+            for offset, chunk in chunks(clean[block_start:block_end], limit):
+                for sent in self.nlp(chunk).sents:
+                    yield block_start + offset, sent
 
     def extract(self, response: str) -> list[Claim]:
+        if not isinstance(response, str):
+            raise TypeError(f"response must be a string, got {type(response).__name__}")
         # Blank out inline markdown without moving any character, so spans still index the original text.
         clean = _EMPHASIS.sub(lambda m: " " * len(m.group()), response)
         claims: list[Claim] = []
         referents = _Referents()
         seen: dict[str, int] = {}
-        for block_start, block_end in _blocks(clean):
-            doc = self.nlp(clean[block_start:block_end])
-            for sent in doc.sents:
-                text = re.sub(r"\s+", " ", sent.text).strip()
-                if not text or _is_question(text) or _PLEASANTRY.match(text):
+
+        def add(claim: Claim) -> None:
+            key = _dedupe_key(claim.resolved_text)
+            claim.duplicate_of = seen.get(key)
+            seen.setdefault(key, claim.id)
+            claims.append(claim)
+
+        for offset, sent in self._sentences(clean):
+            text = re.sub(r"\s+", " ", sent.text).strip()
+            if not text or _is_question(text) or _PLEASANTRY.match(text):
+                continue
+            referents.update(sent)          # first, so a pronoun later in this same sentence can use it
+            if len(text.split()) > self.max_sentence_words:
+                for body, start, end in self._run_on_parts(sent):
+                    add(Claim(len(claims) + 1, _finish(body), text, offset + start, offset + end))
+                continue
+            pieces = _decompose(sent)
+            for piece in pieces:
+                cut = _opener_length(piece.tokens)
+                tokens = piece.tokens[cut:]
+                body = _join(tokens, piece.words)
+                if not body or _PLEASANTRY.match(body) or not self._is_claim(body, piece, text, len(pieces) > 1):
                     continue
-                referents.update(sent)      # first, so a pronoun later in this same sentence can use it
-                pieces = _decompose(sent)
-                for piece in pieces:
-                    cut = _opener_length(piece.tokens)
-                    tokens = piece.tokens[cut:]
-                    body = _join(tokens, piece.words)
-                    if not body or _PLEASANTRY.match(body) or not self._is_claim(body, piece, text, len(pieces) > 1):
-                        continue
-                    start = tokens[0].idx if cut else piece.start
-                    claim = Claim(len(claims) + 1, _finish(body), text, block_start + start, block_start + piece.end)
-                    referent = referents.resolve(piece.subject)
-                    if referent and any(t.i == piece.subject.i for t in tokens):
-                        claim.resolved_text = _finish(_join(tokens, {**piece.words, piece.subject.i: referent}))
-                    elif referents.ambiguous(piece.subject):
-                        claim.ambiguous_pronoun = piece.subject.lower_
-                        claim.pronoun_referent, claim.pronoun_rival = referents.candidates(piece.subject)
-                    if piece.context:       # also keeps two "X credited this to Asia." from different facts apart
-                        claim.resolved_text = _finish(_join(piece.context[_opener_length(piece.context):]))
-                    key = _dedupe_key(claim.resolved_text)
-                    claim.duplicate_of = seen.get(key)
-                    seen.setdefault(key, claim.id)
-                    claims.append(claim)
+                start = tokens[0].idx if cut else piece.start
+                claim = Claim(len(claims) + 1, _finish(body), text, offset + start, offset + piece.end)
+                referent = referents.resolve(piece.subject)
+                if referent and any(t.i == piece.subject.i for t in tokens):
+                    claim.resolved_text = _finish(_join(tokens, {**piece.words, piece.subject.i: referent}))
+                elif referents.ambiguous(piece.subject):
+                    claim.ambiguous_pronoun = piece.subject.lower_
+                    claim.pronoun_referent, claim.pronoun_rival = referents.candidates(piece.subject)
+                if piece.context:           # also keeps two "X credited this to Asia." from different facts apart
+                    claim.resolved_text = _finish(_join(piece.context[_opener_length(piece.context):]))
+                add(claim)
         return claims
+
+    def _run_on_parts(self, sent) -> list[tuple[str, int, int]]:
+        """A sentence over max_sentence_words, cut at commas / semicolons into parts that are checked as written.
+
+        The parse of a run-on sentence is unreliable, and grammar-based splitting and the per-claim checks get
+        slow on it, so its parts are bounded instead. The pipeline adds a warning.
+        """
+        text = sent.doc.text
+        parts = []
+        for start, end in split_long(text, sent.start_char, sent.end_char, self.max_sentence_words):
+            body = re.sub(r"\s+", " ", text[start:end]).strip(" ,;")
+            if len(body.split()) >= self.min_words:
+                parts.append((body, start, end))
+        return parts
 
     def _is_claim(self, body: str, piece: _Piece, sentence: str, split: bool) -> bool:
         words = len(body.split())

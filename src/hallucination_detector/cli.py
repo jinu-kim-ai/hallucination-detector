@@ -4,13 +4,16 @@
   hallucheck detect --answer examples/answer.txt --source examples/source.txt
   hallucheck evaluate --data data --sweep
   hallucheck cases --dir examples/cases --verbose
+  hallucheck download                      # fetch the models once; later runs work offline
 
 (`python -m hallucination_detector ...` works the same way.)
 """
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
+import logging
 import sys
 from pathlib import Path
 from typing import Callable, TypeVar
@@ -18,6 +21,7 @@ from typing import Callable, TypeVar
 from .cases import format_results, load_cases, run_case
 from .config import Config
 from .evaluate import format_report, load_dataset, predict_all, score, sweep_thresholds
+from .models import ModelLoadError, load_spacy
 from .pipeline import HallucinationDetector
 from .report import to_html, to_json, to_text
 from .sources import load_request, load_text_sources, read_text
@@ -26,7 +30,7 @@ T = TypeVar("T")
 
 # Bad input files and bad settings: reported as one line, not a traceback. JSON and UTF-8 decode
 # errors are ValueErrors; a missing file is an OSError.
-INPUT_ERRORS = (OSError, ValueError)
+INPUT_ERRORS = (OSError, ValueError, ModelLoadError)
 
 # Config fields that the CLI exposes as --flags (dest name == Config field name).
 CONFIG_FLAGS = ("embedder", "support_threshold", "related_threshold", "contradiction_threshold",
@@ -54,7 +58,8 @@ def _int_at_least(minimum: int) -> Callable[[str], int]:
 
 def build_parser() -> argparse.ArgumentParser:
     defaults = Config()
-    ap = argparse.ArgumentParser(prog="hallucheck", description=__doc__.split("\n")[0])
+    ap = argparse.ArgumentParser(
+        prog="hallucheck", description="Check an AI-generated response against source documents, claim by claim.")
     ap.add_argument("--embedder", default=defaults.embedder, help="sentence-transformers model, or 'hashing'")
     ap.add_argument("--no-nli", action="store_true", help="skip the NLI cross-encoder (faster, smaller download)")
     t = ap.add_argument_group("thresholds (defaults from config.py)")
@@ -87,6 +92,8 @@ def build_parser() -> argparse.ArgumentParser:
     e.add_argument("--data", default="data")
     e.add_argument("--sweep", action="store_true", help="sweep the support threshold")
     e.add_argument("--out", help="write metrics + predictions JSON here")
+
+    sub.add_parser("download", help="download and load every model once, so later runs need no network")
 
     c = sub.add_parser("cases", help="run the sample cases (realistic answers with true labels) and compare")
     c.add_argument("--dir", default="examples/cases", help="folder of case files (default %(default)s)")
@@ -191,6 +198,50 @@ def _run_cases(args: argparse.Namespace, detector: HallucinationDetector, cases:
     return 0
 
 
+def _install_spacy_model(name: str):
+    """Load the spaCy model, installing its package first if it is missing."""
+    try:
+        return load_spacy(name)
+    except ModelLoadError:
+        pass
+    import spacy.cli
+
+    try:
+        spacy.cli.download(name)
+    except SystemExit as exc:               # spaCy exits when pip fails or the model name is unknown
+        raise ModelLoadError(f"could not install the spaCy model '{name}'. Check the model name and your "
+                             f"internet connection, or run: python -m spacy download {name}") from exc
+    importlib.invalidate_caches()           # the package was installed while this process was running
+    return load_spacy(name)
+
+
+def _run_download(config: Config) -> int:
+    from .nli import NLIScorer
+    from .retrieval import get_embedder
+
+    steps = [("spaCy", config.spacy_model, _install_spacy_model)]
+    if config.embedder != "hashing":
+        steps.append(("embedding", config.embedder, get_embedder))
+    if config.use_nli:
+        steps.append(("NLI", config.nli_model, NLIScorer))
+    for kind, name, load in steps:
+        print(f"{kind} model '{name}' ...", flush=True)
+        load(name)
+        print("  ready")
+    print("All models are ready. Later runs load them from the local cache and need no network.")
+    return 0
+
+
+def _log_to_stderr() -> None:
+    """Show the library's progress notes ("Downloading the NLI model ...") on stderr."""
+    log = logging.getLogger("hallucination_detector")
+    if not log.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter("%(message)s"))
+        log.addHandler(handler)
+        log.setLevel(logging.INFO)
+
+
 def _load_input(args: argparse.Namespace):
     if args.cmd == "detect":
         return _load_detect_input(args)
@@ -201,10 +252,16 @@ def _load_input(args: argparse.Namespace):
 
 def main(argv=None) -> int:
     _utf8_streams()
+    _log_to_stderr()
     ap = build_parser()
     args = ap.parse_args(argv)
     if args.cmd == "detect" and not (args.request or args.answer):
         ap.error("detect needs --request FILE, or --answer FILE with --source FILE")
+    if args.cmd == "download":
+        try:
+            return _run_download(config_from_args(args))
+        except INPUT_ERRORS as e:
+            return _fail(ap, e)
     # Input is read before the models load, so a typo in a path fails in a second, not after a minute.
     try:
         inputs = _load_input(args)
@@ -214,8 +271,8 @@ def main(argv=None) -> int:
     run = {"detect": _run_detect, "evaluate": _run_evaluate, "cases": _run_cases}[args.cmd]
     try:
         return run(args, detector, inputs)
-    except OSError as e:                            # an output file could not be written
-        return _fail(ap, e)
+    except (OSError, ModelLoadError) as e:          # an output file could not be written, or the NLI model
+        return _fail(ap, e)                         # (loaded on first use) could not be had
 
 
 if __name__ == "__main__":
