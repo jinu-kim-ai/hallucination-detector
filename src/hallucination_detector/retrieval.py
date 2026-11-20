@@ -1,0 +1,87 @@
+"""Evidence retrieval: embed source sentences once, then cosine top-k per claim."""
+from __future__ import annotations
+
+import hashlib
+import re
+from dataclasses import dataclass
+
+import numpy as np
+
+from .schemas import Sentence
+
+
+class SentenceTransformerEmbedder:
+    """Default backend: a Sentence Transformers bi-encoder."""
+
+    def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
+        from sentence_transformers import SentenceTransformer
+
+        self.model = SentenceTransformer(model_name)
+        self.name = model_name
+
+    def encode(self, texts: list[str]) -> np.ndarray:
+        return np.asarray(self.model.encode(texts, normalize_embeddings=True, show_progress_bar=False, batch_size=64))
+
+
+class HashingEmbedder:
+    """Dependency-free lexical fallback (hashed word uni/bigrams). Much weaker; for offline use and fast tests."""
+
+    name = "hashing"
+
+    def __init__(self, dim: int = 2048):
+        self.dim = dim
+
+    def encode(self, texts: list[str]) -> np.ndarray:
+        out = np.zeros((len(texts), self.dim), dtype=np.float32)
+        for row, text in enumerate(texts):
+            words = re.findall(r"[a-z0-9]+", text.lower())
+            for gram in words + [f"{a}_{b}" for a, b in zip(words, words[1:])]:
+                out[row, int(hashlib.md5(gram.encode()).hexdigest(), 16) % self.dim] += 1.0
+        norms = np.linalg.norm(out, axis=1, keepdims=True)
+        return out / np.where(norms == 0, 1, norms)
+
+
+def get_embedder(name: str):
+    return HashingEmbedder() if name == "hashing" else SentenceTransformerEmbedder(name)
+
+
+@dataclass
+class SourceIndex:
+    sentences: list[Sentence]      # every sentence of every document, in order
+    matrix: np.ndarray             # one normalized embedding row per sentence
+    text_lower: str                # all source text, lower-cased (for "does this name appear anywhere" checks)
+
+    def neighbors(self, i: int, radius: int) -> list[Sentence]:
+        """Sentence i with up to `radius` sentences on each side, from the same document."""
+        me = self.sentences[i]
+        lo, hi = max(0, i - radius), min(len(self.sentences), i + radius + 1)
+        return [s for s in self.sentences[lo:hi] if s.source_id == me.source_id]
+
+
+class Retriever:
+    def __init__(self, embedder):
+        self.embedder = embedder
+        self._cache: dict[str, np.ndarray] = {}     # document hash -> sentence embeddings
+
+    def index(self, per_document: list[tuple[str, list[Sentence]]]) -> SourceIndex:
+        """per_document: (document text, its sentences) pairs. Embeddings are cached per document."""
+        sentences, blocks, texts = [], [], []
+        for text, sents in per_document:
+            texts.append(text)
+            if not sents:
+                continue
+            key = hashlib.sha1((self.embedder.name + "\0" + "\0".join(s.text for s in sents)).encode()).hexdigest()
+            if key not in self._cache:
+                self._cache[key] = self.embedder.encode([s.text for s in sents])
+            sentences.extend(sents)
+            blocks.append(self._cache[key])
+        matrix = np.vstack(blocks) if blocks else np.zeros((0, 1), dtype=np.float32)
+        return SourceIndex(sentences, matrix, "\n".join(texts).lower())
+
+    def search(self, index: SourceIndex, query: str, k: int) -> list[tuple[int, float]]:
+        """(sentence position, cosine similarity) for the k closest sentences, best first."""
+        if not index.sentences:
+            return []
+        sims = index.matrix @ self.embedder.encode([query])[0]
+        order = np.argsort(-sims, kind="stable")[:k]
+        return [(int(i), float(sims[i])) for i in order]

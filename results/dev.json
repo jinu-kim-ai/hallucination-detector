@@ -1,26 +1,40 @@
 {
+  "config": {
+    "spacy_model": "en_core_web_sm",
+    "embedder": "all-MiniLM-L6-v2",
+    "nli_model": null,
+    "use_nli": false,
+    "top_k": 3,
+    "related_threshold": 0.45,
+    "support_threshold": 0.65,
+    "contradiction_threshold": 0.7,
+    "nli_threshold": 0.7,
+    "nli_top_k": 3,
+    "nli_context_sentences": 0,
+    "min_claim_words": 3
+  },
   "metrics": {
     "binary_hallucination_detection": {
       "n": 50,
-      "precision": 1.0,
-      "recall": 1.0,
-      "f1": 1.0,
-      "accuracy": 1.0
+      "precision": 0.964,
+      "recall": 0.9,
+      "f1": 0.931,
+      "accuracy": 0.92
     },
     "by_domain": {
       "finance": {
         "n": 10,
-        "precision": 1.0,
-        "recall": 1.0,
-        "f1": 1.0,
-        "accuracy": 1.0
+        "precision": 0.833,
+        "recall": 0.833,
+        "f1": 0.833,
+        "accuracy": 0.8
       },
       "history": {
         "n": 10,
         "precision": 1.0,
-        "recall": 1.0,
-        "f1": 1.0,
-        "accuracy": 1.0
+        "recall": 0.833,
+        "f1": 0.909,
+        "accuracy": 0.9
       },
       "medicine": {
         "n": 10,
@@ -32,9 +46,9 @@
       "science": {
         "n": 10,
         "precision": 1.0,
-        "recall": 1.0,
-        "f1": 1.0,
-        "accuracy": 1.0
+        "recall": 0.833,
+        "f1": 0.909,
+        "accuracy": 0.9
       },
       "technology": {
         "n": 10,
@@ -44,16 +58,16 @@
         "accuracy": 1.0
       }
     },
-    "four_way_accuracy": 0.98,
+    "four_way_accuracy": 0.9,
     "per_label": {
       "SUPPORTED": {
-        "precision": 1.0,
-        "recall": 1.0,
+        "precision": 0.864,
+        "recall": 0.95,
         "support": 20
       },
       "CONTRADICTED": {
         "precision": 1.0,
-        "recall": 0.933,
+        "recall": 0.733,
         "support": 15
       },
       "FABRICATED": {
@@ -62,21 +76,21 @@
         "support": 10
       },
       "UNSUPPORTED": {
-        "precision": 1.0,
+        "precision": 0.833,
         "recall": 1.0,
         "support": 5
       }
     },
     "confusion": {
       "SUPPORTED": {
-        "SUPPORTED": 20,
+        "SUPPORTED": 19,
         "CONTRADICTED": 0,
         "FABRICATED": 0,
-        "UNSUPPORTED": 0
+        "UNSUPPORTED": 1
       },
       "CONTRADICTED": {
-        "SUPPORTED": 0,
-        "CONTRADICTED": 14,
+        "SUPPORTED": 3,
+        "CONTRADICTED": 11,
         "FABRICATED": 1,
         "UNSUPPORTED": 0
       },
@@ -115,7 +129,7 @@
       "claim": "Curie and her husband discovered polonium and radium in 1898.",
       "label": "SUPPORTED",
       "pred": "SUPPORTED",
-      "confidence": 0.963,
+      "confidence": 0.942,
       "similarity": 0.9359288215637207,
       "reasons": [
         "best evidence similarity 0.94"
@@ -128,7 +142,7 @@
       "claim": "She was the first person to win Nobel Prizes in two different sciences.",
       "label": "SUPPORTED",
       "pred": "SUPPORTED",
-      "confidence": 0.987,
+      "confidence": 0.896,
       "similarity": 0.8853020071983337,
       "reasons": [
         "best evidence similarity 0.89"
@@ -159,8 +173,7 @@
       "reasons": [
         "best evidence similarity 0.78",
         "number mismatch: claim says 1895, evidence says 1891",
-        "DATE mismatch: claim says '1895', evidence says '1891'",
-        "NLI contradiction p=0.97"
+        "DATE mismatch: claim says '1895', evidence says '1891'"
       ]
     },
     {
@@ -169,12 +182,11 @@
       "source_id": "curie",
       "claim": "In 1903 she shared the Nobel Prize in Chemistry with Pierre Curie and Henri Becquerel.",
       "label": "CONTRADICTED",
-      "pred": "CONTRADICTED",
-      "confidence": 0.979,
+      "pred": "SUPPORTED",
+      "confidence": 0.964,
       "similarity": 0.9606543779373169,
       "reasons": [
-        "best evidence similarity 0.96",
-        "NLI contradiction p=0.99"
+        "best evidence similarity 0.96"
       ]
     },
     {
@@ -253,7 +265,7 @@
       "claim": "The lunar module Eagle landed in the Sea of Tranquility on July 20, 1969.",
       "label": "SUPPORTED",
       "pred": "SUPPORTED",
-      "confidence": 0.995,
+      "confidence": 0.993,
       "similarity": 0.9922090768814087,
       "reasons": [
         "best evidence similarity 0.99"
@@ -279,7 +291,7 @@
       "claim": "Aldrin stepped onto the Moon roughly 19 minutes after Armstrong.",
       "label": "SUPPORTED",
       "pred": "SUPPORTED",
-      "confidence": 0.995,
+      "confidence": 0.878,
       "similarity": 0.8652645945549011,
       "reasons": [
         "best evidence similarity 0.87"
@@ -292,12 +304,11 @@
       "claim": "The astronauts collected about 45 kilograms of lunar samples.",
       "label": "CONTRADICTED",
       "pred": "CONTRADICTED",
-      "confidence": 1.0,
+      "confidence": 0.991,
       "similarity": 0.983910322189331,
       "reasons": [
         "best evidence similarity 0.98",
-        "number mismatch: claim says 45, evidence says 21.5",
-        "NLI contradiction p=1.00"
+        "number mismatch: claim says 45, evidence says 21.5"
       ]
     },
     {
@@ -307,12 +318,11 @@
       "claim": "The mission splashed down in the Atlantic Ocean on July 24, 1969.",
       "label": "CONTRADICTED",
       "pred": "CONTRADICTED",
-      "confidence": 1.0,
+      "confidence": 0.898,
       "similarity": 0.8125360012054443,
       "reasons": [
         "best evidence similarity 0.81",
-        "LOC mismatch: claim says 'the Atlantic Ocean', evidence says 'Earth'",
-        "NLI contradiction p=1.00"
+        "LOC mismatch: claim says 'the Atlantic Ocean', evidence says 'the Pacific Ocean'"
       ]
     },
     {
@@ -321,12 +331,11 @@
       "source_id": "apollo11",
       "claim": "Buzz Aldrin was the first person to walk on the Moon.",
       "label": "CONTRADICTED",
-      "pred": "CONTRADICTED",
-      "confidence": 0.926,
+      "pred": "SUPPORTED",
+      "confidence": 0.877,
       "similarity": 0.8651408553123474,
       "reasons": [
-        "best evidence similarity 0.87",
-        "NLI contradiction p=0.99"
+        "best evidence similarity 0.87"
       ]
     },
     {
@@ -378,7 +387,7 @@
       "claim": "Insulin is produced by beta cells in the pancreas.",
       "label": "SUPPORTED",
       "pred": "SUPPORTED",
-      "confidence": 0.993,
+      "confidence": 0.95,
       "similarity": 0.9446026086807251,
       "reasons": [
         "best evidence similarity 0.94"
@@ -404,7 +413,7 @@
       "claim": "Banting and Best first isolated insulin in 1921 at the University of Toronto.",
       "label": "SUPPORTED",
       "pred": "SUPPORTED",
-      "confidence": 0.995,
+      "confidence": 0.923,
       "similarity": 0.914790153503418,
       "reasons": [
         "best evidence similarity 0.91"
@@ -417,7 +426,7 @@
       "claim": "People with type 1 diabetes require insulin therapy.",
       "label": "SUPPORTED",
       "pred": "SUPPORTED",
-      "confidence": 0.992,
+      "confidence": 0.925,
       "similarity": 0.9172826409339905,
       "reasons": [
         "best evidence similarity 0.92"
@@ -435,8 +444,7 @@
       "reasons": [
         "best evidence similarity 0.94",
         "number mismatch: claim says 1925, evidence says 1921",
-        "DATE mismatch: claim says '1925', evidence says '1921'",
-        "NLI contradiction p=1.00"
+        "DATE mismatch: claim says '1925', evidence says '1921'"
       ]
     },
     {
@@ -451,8 +459,7 @@
       "reasons": [
         "best evidence similarity 0.96",
         "number mismatch: claim says 12, evidence says 14, 1922",
-        "DATE mismatch: claim says '12-year-old', evidence says '14-year-old'",
-        "NLI contradiction p=1.00"
+        "DATE mismatch: claim says '12-year-old', evidence says '14-year-old'"
       ]
     },
     {
@@ -462,12 +469,11 @@
       "claim": "Type 1 diabetes is usually managed first with diet, exercise, and metformin.",
       "label": "CONTRADICTED",
       "pred": "CONTRADICTED",
-      "confidence": 1.0,
+      "confidence": 0.896,
       "similarity": 0.8091394901275635,
       "reasons": [
         "best evidence similarity 0.81",
-        "number mismatch: claim says 1, evidence says 2",
-        "NLI contradiction p=0.98"
+        "number mismatch: claim says 1, evidence says 2"
       ]
     },
     {
@@ -519,7 +525,7 @@
       "claim": "Python was created by Guido van Rossum.",
       "label": "SUPPORTED",
       "pred": "SUPPORTED",
-      "confidence": 0.995,
+      "confidence": 0.887,
       "similarity": 0.8758977651596069,
       "reasons": [
         "best evidence similarity 0.88"
@@ -545,7 +551,7 @@
       "claim": "Python uses indentation to define code blocks.",
       "label": "SUPPORTED",
       "pred": "SUPPORTED",
-      "confidence": 0.993,
+      "confidence": 0.931,
       "similarity": 0.9244986772537231,
       "reasons": [
         "best evidence similarity 0.92"
@@ -558,7 +564,7 @@
       "claim": "Python 3.0, released in 2008, was not backward compatible with Python 2.",
       "label": "SUPPORTED",
       "pred": "SUPPORTED",
-      "confidence": 0.995,
+      "confidence": 0.99,
       "similarity": 0.9894261360168457,
       "reasons": [
         "best evidence similarity 0.99"
@@ -576,8 +582,7 @@
       "reasons": [
         "best evidence similarity 0.98",
         "number mismatch: claim says 2018, evidence says 1, 2, 2020",
-        "DATE mismatch: claim says 'January 1, 2018', evidence says 'January 1, 2020'",
-        "NLI contradiction p=0.99"
+        "DATE mismatch: claim says 'January 1, 2018', evidence says 'January 1, 2020'"
       ]
     },
     {
@@ -587,12 +592,11 @@
       "claim": "Python 3.0 was fully backward compatible with Python 2.",
       "label": "CONTRADICTED",
       "pred": "CONTRADICTED",
-      "confidence": 1.0,
+      "confidence": 0.951,
       "similarity": 0.911016583442688,
       "reasons": [
         "best evidence similarity 0.91",
-        "polarity mismatch: negation differs from evidence",
-        "NLI contradiction p=1.00"
+        "polarity mismatch: negation differs from evidence"
       ]
     },
     {
@@ -602,12 +606,11 @@
       "claim": "Python is a high-level programming language created by James Gosling.",
       "label": "CONTRADICTED",
       "pred": "CONTRADICTED",
-      "confidence": 1.0,
+      "confidence": 0.91,
       "similarity": 0.8355156779289246,
       "reasons": [
         "best evidence similarity 0.84",
-        "PERSON mismatch: claim says 'James Gosling', evidence says 'Guido van Rossum'",
-        "NLI contradiction p=1.00"
+        "PERSON mismatch: claim says 'James Gosling', evidence says 'Guido van Rossum'"
       ]
     },
     {
@@ -659,7 +662,7 @@
       "claim": "Northwind Robotics reported third-quarter revenue of $412 million.",
       "label": "SUPPORTED",
       "pred": "SUPPORTED",
-      "confidence": 0.992,
+      "confidence": 0.967,
       "similarity": 0.9632591009140015,
       "reasons": [
         "best evidence similarity 0.96"
@@ -671,11 +674,12 @@
       "source_id": "northwind",
       "claim": "Revenue grew 18% compared with the same quarter a year earlier.",
       "label": "SUPPORTED",
-      "pred": "SUPPORTED",
-      "confidence": 0.995,
+      "pred": "UNSUPPORTED",
+      "confidence": 0.603,
       "similarity": 0.5158765316009521,
       "reasons": [
-        "best evidence similarity 0.52"
+        "best evidence similarity 0.52",
+        "no source sentence reaches support threshold 0.65"
       ]
     },
     {
@@ -685,7 +689,7 @@
       "claim": "The warehouse automation segment made up 61% of total revenue.",
       "label": "SUPPORTED",
       "pred": "SUPPORTED",
-      "confidence": 0.996,
+      "confidence": 0.976,
       "similarity": 0.9739429354667664,
       "reasons": [
         "best evidence similarity 0.97"
@@ -711,12 +715,11 @@
       "claim": "Net income for the quarter was $73 million.",
       "label": "CONTRADICTED",
       "pred": "CONTRADICTED",
-      "confidence": 1.0,
+      "confidence": 0.866,
       "similarity": 0.7541196346282959,
       "reasons": [
         "best evidence similarity 0.75",
-        "number mismatch: claim says 73, evidence says 37, 1e+06",
-        "NLI contradiction p=0.98"
+        "number mismatch: claim says 73, evidence says 37, 1e+06"
       ]
     },
     {
@@ -726,12 +729,11 @@
       "claim": "Northwind Robotics employs approximately 4,200 people and is headquartered in Cleveland.",
       "label": "CONTRADICTED",
       "pred": "CONTRADICTED",
-      "confidence": 1.0,
+      "confidence": 0.945,
       "similarity": 0.8995251059532166,
       "reasons": [
         "best evidence similarity 0.90",
-        "GPE mismatch: claim says 'Cleveland', evidence says 'Pittsburgh'",
-        "NLI contradiction p=1.00"
+        "GPE mismatch: claim says 'Cleveland', evidence says 'Pittsburgh'"
       ]
     },
     {
@@ -740,12 +742,11 @@
       "source_id": "northwind",
       "claim": "Chief Executive Officer Dana Whitfield said demand from logistics customers weakened.",
       "label": "CONTRADICTED",
-      "pred": "CONTRADICTED",
-      "confidence": 0.879,
+      "pred": "SUPPORTED",
+      "confidence": 0.799,
       "similarity": 0.7788711786270142,
       "reasons": [
-        "best evidence similarity 0.78",
-        "NLI contradiction p=1.00"
+        "best evidence similarity 0.78"
       ]
     },
     {

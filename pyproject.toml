@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hallucination-detector"
+version = "2.0.0"
+description = "Claim-level hallucination detection for LLM responses, with a reliability score and citations."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.26",
+    "spacy>=3.7",
+    "sentence-transformers>=3.0",
+]
+
+[project.optional-dependencies]
+app = ["streamlit>=1.40", "pandas>=2.0"]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+hallucheck = "hallucination_detector.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

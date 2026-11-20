@@ -1,0 +1,689 @@
+{
+  "config": {
+    "spacy_model": "en_core_web_sm",
+    "embedder": "all-MiniLM-L6-v2",
+    "nli_model": "cross-encoder/nli-deberta-v3-xsmall",
+    "use_nli": true,
+    "top_k": 3,
+    "related_threshold": 0.45,
+    "support_threshold": 0.65,
+    "contradiction_threshold": 0.7,
+    "nli_threshold": 0.7,
+    "nli_top_k": 3,
+    "nli_context_sentences": 0,
+    "min_claim_words": 3
+  },
+  "metrics": {
+    "binary_hallucination_detection": {
+      "n": 40,
+      "precision": 0.864,
+      "recall": 0.905,
+      "f1": 0.884,
+      "accuracy": 0.875
+    },
+    "by_domain": {
+      "biology": {
+        "n": 8,
+        "precision": 1.0,
+        "recall": 0.75,
+        "f1": 0.857,
+        "accuracy": 0.875
+      },
+      "civic": {
+        "n": 8,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "accuracy": 1.0
+      },
+      "geography": {
+        "n": 8,
+        "precision": 0.833,
+        "recall": 1.0,
+        "f1": 0.909,
+        "accuracy": 0.875
+      },
+      "multi-doc": {
+        "n": 8,
+        "precision": 0.75,
+        "recall": 0.75,
+        "f1": 0.75,
+        "accuracy": 0.75
+      },
+      "sports": {
+        "n": 8,
+        "precision": 0.8,
+        "recall": 1.0,
+        "f1": 0.889,
+        "accuracy": 0.875
+      }
+    },
+    "four_way_accuracy": 0.8,
+    "per_label": {
+      "SUPPORTED": {
+        "precision": 0.889,
+        "recall": 0.842,
+        "support": 19
+      },
+      "CONTRADICTED": {
+        "precision": 0.818,
+        "recall": 0.75,
+        "support": 12
+      },
+      "FABRICATED": {
+        "precision": 0.556,
+        "recall": 1.0,
+        "support": 5
+      },
+      "UNSUPPORTED": {
+        "precision": 1.0,
+        "recall": 0.5,
+        "support": 4
+      }
+    },
+    "confusion": {
+      "SUPPORTED": {
+        "SUPPORTED": 16,
+        "CONTRADICTED": 2,
+        "FABRICATED": 1,
+        "UNSUPPORTED": 0
+      },
+      "CONTRADICTED": {
+        "SUPPORTED": 1,
+        "CONTRADICTED": 9,
+        "FABRICATED": 2,
+        "UNSUPPORTED": 0
+      },
+      "FABRICATED": {
+        "SUPPORTED": 0,
+        "CONTRADICTED": 0,
+        "FABRICATED": 5,
+        "UNSUPPORTED": 0
+      },
+      "UNSUPPORTED": {
+        "SUPPORTED": 1,
+        "CONTRADICTED": 0,
+        "FABRICATED": 1,
+        "UNSUPPORTED": 2
+      }
+    }
+  },
+  "predictions": [
+    {
+      "id": "geo-01",
+      "domain": "geography",
+      "source_id": "everest",
+      "claim": "Mount Everest's summit is 8,849 meters above sea level.",
+      "label": "SUPPORTED",
+      "pred": "FABRICATED",
+      "confidence": 0.673,
+      "similarity": 0.9336748123168945,
+      "reasons": [
+        "best evidence similarity 0.93",
+        "not found in source: 'Mount Everest's'"
+      ]
+    },
+    {
+      "id": "geo-02",
+      "domain": "geography",
+      "source_id": "everest",
+      "claim": "Hillary and Norgay made the first confirmed ascent of Everest on May 29, 1953.",
+      "label": "SUPPORTED",
+      "pred": "SUPPORTED",
+      "confidence": 0.923,
+      "similarity": 0.9148150682449341,
+      "reasons": [
+        "best evidence similarity 0.91"
+      ]
+    },
+    {
+      "id": "geo-03",
+      "domain": "geography",
+      "source_id": "everest",
+      "claim": "Everest sits on the border of Nepal and China.",
+      "label": "SUPPORTED",
+      "pred": "SUPPORTED",
+      "confidence": 0.815,
+      "similarity": 0.7960652709007263,
+      "reasons": [
+        "best evidence similarity 0.80"
+      ]
+    },
+    {
+      "id": "geo-04",
+      "domain": "geography",
+      "source_id": "everest",
+      "claim": "The first confirmed ascent of Everest took place on May 29, 1963.",
+      "label": "CONTRADICTED",
+      "pred": "FABRICATED",
+      "confidence": 0.867,
+      "similarity": 0.6656185984611511,
+      "reasons": [
+        "best evidence similarity 0.67",
+        "not found in source: 1963, 'May 29, 1963'"
+      ]
+    },
+    {
+      "id": "geo-05",
+      "domain": "geography",
+      "source_id": "everest",
+      "claim": "Mount Everest lies on the border between Nepal and India.",
+      "label": "CONTRADICTED",
+      "pred": "CONTRADICTED",
+      "confidence": 1.0,
+      "similarity": 0.7417712211608887,
+      "reasons": [
+        "best evidence similarity 0.74",
+        "GPE mismatch: claim says 'India', evidence says 'China'",
+        "NLI contradiction p=0.98"
+      ]
+    },
+    {
+      "id": "geo-06",
+      "domain": "geography",
+      "source_id": "everest",
+      "claim": "Most climbers attempt the summit in October, when the weather is most stable.",
+      "label": "CONTRADICTED",
+      "pred": "CONTRADICTED",
+      "confidence": 0.868,
+      "similarity": 0.7572718858718872,
+      "reasons": [
+        "best evidence similarity 0.76",
+        "NLI contradiction p=1.00"
+      ]
+    },
+    {
+      "id": "geo-07",
+      "domain": "geography",
+      "source_id": "everest",
+      "claim": "The first ascent was funded by the Royal Geographical Society with a grant of 20,000 pounds.",
+      "label": "FABRICATED",
+      "pred": "FABRICATED",
+      "confidence": 0.929,
+      "similarity": 0.48958632349967957,
+      "reasons": [
+        "best evidence similarity 0.49",
+        "not found in source: 20000, 'the Royal Geographical Society'"
+      ]
+    },
+    {
+      "id": "geo-08",
+      "domain": "geography",
+      "source_id": "everest",
+      "claim": "Climbing Everest is the ultimate dream of every mountaineer.",
+      "label": "UNSUPPORTED",
+      "pred": "UNSUPPORTED",
+      "confidence": 0.601,
+      "similarity": 0.5192177295684814,
+      "reasons": [
+        "best evidence similarity 0.52",
+        "no source sentence reaches support threshold 0.65"
+      ]
+    },
+    {
+      "id": "bio-01",
+      "domain": "biology",
+      "source_id": "photosynthesis",
+      "claim": "Plants convert light energy into chemical energy through photosynthesis.",
+      "label": "SUPPORTED",
+      "pred": "SUPPORTED",
+      "confidence": 0.994,
+      "similarity": 0.9477055668830872,
+      "reasons": [
+        "best evidence similarity 0.95"
+      ]
+    },
+    {
+      "id": "bio-02",
+      "domain": "biology",
+      "source_id": "photosynthesis",
+      "claim": "Photosynthesis happens mostly in the chloroplasts of leaf cells.",
+      "label": "SUPPORTED",
+      "pred": "SUPPORTED",
+      "confidence": 0.836,
+      "similarity": 0.819055438041687,
+      "reasons": [
+        "best evidence similarity 0.82"
+      ]
+    },
+    {
+      "id": "bio-03",
+      "domain": "biology",
+      "source_id": "photosynthesis",
+      "claim": "Oxygen is released as a byproduct of photosynthesis.",
+      "label": "SUPPORTED",
+      "pred": "SUPPORTED",
+      "confidence": 0.784,
+      "similarity": 0.7620851993560791,
+      "reasons": [
+        "best evidence similarity 0.76"
+      ]
+    },
+    {
+      "id": "bio-04",
+      "domain": "biology",
+      "source_id": "photosynthesis",
+      "claim": "Chlorophyll absorbs mostly red and blue light.",
+      "label": "SUPPORTED",
+      "pred": "SUPPORTED",
+      "confidence": 0.992,
+      "similarity": 0.9171024560928345,
+      "reasons": [
+        "best evidence similarity 0.92"
+      ]
+    },
+    {
+      "id": "bio-05",
+      "domain": "biology",
+      "source_id": "photosynthesis",
+      "claim": "Chlorophyll absorbs mostly green light.",
+      "label": "CONTRADICTED",
+      "pred": "CONTRADICTED",
+      "confidence": 0.93,
+      "similarity": 0.871785044670105,
+      "reasons": [
+        "best evidence similarity 0.87",
+        "NLI contradiction p=0.99"
+      ]
+    },
+    {
+      "id": "bio-06",
+      "domain": "biology",
+      "source_id": "photosynthesis",
+      "claim": "Photosynthesis uses oxygen and water and releases carbon dioxide as a byproduct.",
+      "label": "CONTRADICTED",
+      "pred": "SUPPORTED",
+      "confidence": 0.828,
+      "similarity": 0.8104192614555359,
+      "reasons": [
+        "best evidence similarity 0.81"
+      ]
+    },
+    {
+      "id": "bio-07",
+      "domain": "biology",
+      "source_id": "photosynthesis",
+      "claim": "Photosynthesis was first described by Jan Ingenhousz in 1779.",
+      "label": "FABRICATED",
+      "pred": "FABRICATED",
+      "confidence": 1.0,
+      "similarity": 0.4979325234889984,
+      "reasons": [
+        "best evidence similarity 0.50",
+        "not found in source: 1779, 'Jan Ingenhousz', '1779'"
+      ]
+    },
+    {
+      "id": "bio-08",
+      "domain": "biology",
+      "source_id": "photosynthesis",
+      "claim": "Photosynthesis is the most important chemical process on Earth.",
+      "label": "UNSUPPORTED",
+      "pred": "FABRICATED",
+      "confidence": 0.753,
+      "similarity": 0.7057633399963379,
+      "reasons": [
+        "best evidence similarity 0.71",
+        "not found in source: 'Earth'"
+      ]
+    },
+    {
+      "id": "spo-01",
+      "domain": "sports",
+      "source_id": "marathon",
+      "claim": "The official marathon distance is 42.195 kilometers.",
+      "label": "SUPPORTED",
+      "pred": "SUPPORTED",
+      "confidence": 0.994,
+      "similarity": 0.9518318772315979,
+      "reasons": [
+        "best evidence similarity 0.95"
+      ]
+    },
+    {
+      "id": "spo-02",
+      "domain": "sports",
+      "source_id": "marathon",
+      "claim": "The marathon was included in the first modern Olympics in Athens in 1896.",
+      "label": "SUPPORTED",
+      "pred": "CONTRADICTED",
+      "confidence": 0.92,
+      "similarity": 0.8539869785308838,
+      "reasons": [
+        "best evidence similarity 0.85",
+        "EVENT mismatch: claim says 'Olympics', evidence says 'Olympic Games'"
+      ]
+    },
+    {
+      "id": "spo-03",
+      "domain": "sports",
+      "source_id": "marathon",
+      "claim": "The women's marathon joined the Olympic program in 1984.",
+      "label": "SUPPORTED",
+      "pred": "SUPPORTED",
+      "confidence": 0.996,
+      "similarity": 0.9602514505386353,
+      "reasons": [
+        "best evidence similarity 0.96"
+      ]
+    },
+    {
+      "id": "spo-04",
+      "domain": "sports",
+      "source_id": "marathon",
+      "claim": "Kipchoge's sub-two-hour run in Vienna did not count as an official world record.",
+      "label": "SUPPORTED",
+      "pred": "SUPPORTED",
+      "confidence": 0.995,
+      "similarity": 0.6844526529312134,
+      "reasons": [
+        "best evidence similarity 0.68"
+      ]
+    },
+    {
+      "id": "spo-05",
+      "domain": "sports",
+      "source_id": "marathon",
+      "claim": "The marathon distance was standardized in 1908.",
+      "label": "CONTRADICTED",
+      "pred": "FABRICATED",
+      "confidence": 0.871,
+      "similarity": 0.6550263166427612,
+      "reasons": [
+        "best evidence similarity 0.66",
+        "not found in source: 1908, '1908'"
+      ]
+    },
+    {
+      "id": "spo-06",
+      "domain": "sports",
+      "source_id": "marathon",
+      "claim": "The women's marathon was added to the Olympic program in 1972.",
+      "label": "CONTRADICTED",
+      "pred": "CONTRADICTED",
+      "confidence": 1.0,
+      "similarity": 0.7608317136764526,
+      "reasons": [
+        "best evidence similarity 0.76",
+        "number mismatch: claim says 1972, evidence says 1984",
+        "DATE mismatch: claim says '1972', evidence says '1984'",
+        "NLI contradiction p=1.00"
+      ]
+    },
+    {
+      "id": "spo-07",
+      "domain": "sports",
+      "source_id": "marathon",
+      "claim": "Eliud Kipchoge's run in Vienna counted as an official world record.",
+      "label": "CONTRADICTED",
+      "pred": "CONTRADICTED",
+      "confidence": 1.0,
+      "similarity": 0.7488709092140198,
+      "reasons": [
+        "best evidence similarity 0.75",
+        "polarity mismatch: negation differs from evidence",
+        "NLI contradiction p=1.00"
+      ]
+    },
+    {
+      "id": "spo-08",
+      "domain": "sports",
+      "source_id": "marathon",
+      "claim": "Kipchoge wore prototype shoes developed in Portland for the 2019 run.",
+      "label": "FABRICATED",
+      "pred": "FABRICATED",
+      "confidence": 0.805,
+      "similarity": 0.5576293468475342,
+      "reasons": [
+        "best evidence similarity 0.56",
+        "not found in source: 'Portland'"
+      ]
+    },
+    {
+      "id": "civ-01",
+      "domain": "civic",
+      "source_id": "harborview",
+      "claim": "The transit plan adds 12 bus routes.",
+      "label": "SUPPORTED",
+      "pred": "SUPPORTED",
+      "confidence": 0.985,
+      "similarity": 0.8191003799438477,
+      "reasons": [
+        "best evidence similarity 0.82"
+      ]
+    },
+    {
+      "id": "civ-02",
+      "domain": "civic",
+      "source_id": "harborview",
+      "claim": "Light rail service will be extended to the airport.",
+      "label": "SUPPORTED",
+      "pred": "SUPPORTED",
+      "confidence": 0.994,
+      "similarity": 0.7599926590919495,
+      "reasons": [
+        "best evidence similarity 0.76"
+      ]
+    },
+    {
+      "id": "civ-03",
+      "domain": "civic",
+      "source_id": "harborview",
+      "claim": "Construction is expected to cost $240 million.",
+      "label": "SUPPORTED",
+      "pred": "SUPPORTED",
+      "confidence": 0.994,
+      "similarity": 0.8907051086425781,
+      "reasons": [
+        "best evidence similarity 0.89"
+      ]
+    },
+    {
+      "id": "civ-04",
+      "domain": "civic",
+      "source_id": "harborview",
+      "claim": "Priya Raman said the project will not raise property taxes.",
+      "label": "SUPPORTED",
+      "pred": "SUPPORTED",
+      "confidence": 0.996,
+      "similarity": 0.9715214967727661,
+      "reasons": [
+        "best evidence similarity 0.97"
+      ]
+    },
+    {
+      "id": "civ-05",
+      "domain": "civic",
+      "source_id": "harborview",
+      "claim": "Construction is expected to take six years.",
+      "label": "CONTRADICTED",
+      "pred": "CONTRADICTED",
+      "confidence": 1.0,
+      "similarity": 0.7538455724716187,
+      "reasons": [
+        "best evidence similarity 0.75",
+        "number mismatch: claim says 6, evidence says 4, 240, 1e+06",
+        "DATE mismatch: claim says 'six years', evidence says 'four years'",
+        "NLI contradiction p=0.98"
+      ]
+    },
+    {
+      "id": "civ-06",
+      "domain": "civic",
+      "source_id": "harborview",
+      "claim": "Council member Priya Raman said the project will raise property taxes.",
+      "label": "CONTRADICTED",
+      "pred": "CONTRADICTED",
+      "confidence": 1.0,
+      "similarity": 0.8040952682495117,
+      "reasons": [
+        "best evidence similarity 0.80",
+        "polarity mismatch: negation differs from evidence",
+        "NLI contradiction p=1.00"
+      ]
+    },
+    {
+      "id": "civ-07",
+      "domain": "civic",
+      "source_id": "harborview",
+      "claim": "The plan was drafted by the consulting firm Kessler & Wade.",
+      "label": "FABRICATED",
+      "pred": "FABRICATED",
+      "confidence": 0.924,
+      "similarity": 0.21765965223312378,
+      "reasons": [
+        "best evidence similarity 0.22",
+        "not found in source: 'Kessler & Wade'"
+      ]
+    },
+    {
+      "id": "civ-08",
+      "domain": "civic",
+      "source_id": "harborview",
+      "claim": "Residents are excited about the new transit plan.",
+      "label": "UNSUPPORTED",
+      "pred": "UNSUPPORTED",
+      "confidence": 0.557,
+      "similarity": 0.5757904648780823,
+      "reasons": [
+        "best evidence similarity 0.58",
+        "no source sentence reaches support threshold 0.65"
+      ]
+    },
+    {
+      "id": "multi-01",
+      "domain": "multi-doc",
+      "source_ids": [
+        "orion_press",
+        "orion_filing"
+      ],
+      "claim": "The Vega 3 battery stores 85 kilowatt-hours.",
+      "label": "SUPPORTED",
+      "pred": "CONTRADICTED",
+      "confidence": 0.842,
+      "similarity": 0.710829496383667,
+      "reasons": [
+        "best evidence similarity 0.71",
+        "number mismatch: claim says 3, evidence says 18, 80, 85"
+      ]
+    },
+    {
+      "id": "multi-02",
+      "domain": "multi-doc",
+      "source_ids": [
+        "orion_press",
+        "orion_filing"
+      ],
+      "claim": "Orion Labs is headquartered in Denver.",
+      "label": "SUPPORTED",
+      "pred": "SUPPORTED",
+      "confidence": 0.992,
+      "similarity": 0.9421671032905579,
+      "reasons": [
+        "best evidence similarity 0.94"
+      ]
+    },
+    {
+      "id": "multi-03",
+      "domain": "multi-doc",
+      "source_ids": [
+        "orion_press",
+        "orion_filing"
+      ],
+      "claim": "Marcus Feld said production will begin at the Austin plant.",
+      "label": "SUPPORTED",
+      "pred": "SUPPORTED",
+      "confidence": 0.993,
+      "similarity": 0.9382880926132202,
+      "reasons": [
+        "best evidence similarity 0.94"
+      ]
+    },
+    {
+      "id": "multi-04",
+      "domain": "multi-doc",
+      "source_ids": [
+        "orion_press",
+        "orion_filing"
+      ],
+      "claim": "Orion Labs employs about 3,100 people.",
+      "label": "SUPPORTED",
+      "pred": "SUPPORTED",
+      "confidence": 0.727,
+      "similarity": 0.6995725631713867,
+      "reasons": [
+        "best evidence similarity 0.70"
+      ]
+    },
+    {
+      "id": "multi-05",
+      "domain": "multi-doc",
+      "source_ids": [
+        "orion_press",
+        "orion_filing"
+      ],
+      "claim": "The Vega 3 battery will cost $12,000.",
+      "label": "CONTRADICTED",
+      "pred": "CONTRADICTED",
+      "confidence": 1.0,
+      "similarity": 0.9043990969657898,
+      "reasons": [
+        "best evidence similarity 0.90",
+        "number mismatch: claim says 12000, evidence says 3, 9400",
+        "NLI contradiction p=1.00"
+      ]
+    },
+    {
+      "id": "multi-06",
+      "domain": "multi-doc",
+      "source_ids": [
+        "orion_press",
+        "orion_filing"
+      ],
+      "claim": "Orion Labs was founded in 2015.",
+      "label": "CONTRADICTED",
+      "pred": "CONTRADICTED",
+      "confidence": 1.0,
+      "similarity": 0.8404881954193115,
+      "reasons": [
+        "best evidence similarity 0.84",
+        "number mismatch: claim says 2015, evidence says 2011",
+        "DATE mismatch: claim says '2015', evidence says '2011'",
+        "NLI contradiction p=1.00"
+      ]
+    },
+    {
+      "id": "multi-07",
+      "domain": "multi-doc",
+      "source_ids": [
+        "orion_press",
+        "orion_filing"
+      ],
+      "claim": "Orion Labs plans to open a second plant in Reno next year.",
+      "label": "FABRICATED",
+      "pred": "FABRICATED",
+      "confidence": 0.806,
+      "similarity": 0.5536466836929321,
+      "reasons": [
+        "best evidence similarity 0.55",
+        "not found in source: 'Reno'"
+      ]
+    },
+    {
+      "id": "multi-08",
+      "domain": "multi-doc",
+      "source_ids": [
+        "orion_press",
+        "orion_filing"
+      ],
+      "claim": "The Vega 3 is the best battery on the market.",
+      "label": "UNSUPPORTED",
+      "pred": "SUPPORTED",
+      "confidence": 0.705,
+      "similarity": 0.6755364537239075,
+      "reasons": [
+        "best evidence similarity 0.68"
+      ]
+    }
+  ]
+}

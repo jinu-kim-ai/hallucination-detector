@@ -1,0 +1,40 @@
+{"id": "geo-01", "domain": "geography", "source_id": "everest", "claim": "Mount Everest's summit is 8,849 meters above sea level.", "label": "SUPPORTED"}
+{"id": "geo-02", "domain": "geography", "source_id": "everest", "claim": "Hillary and Norgay made the first confirmed ascent of Everest on May 29, 1953.", "label": "SUPPORTED"}
+{"id": "geo-03", "domain": "geography", "source_id": "everest", "claim": "Everest sits on the border of Nepal and China.", "label": "SUPPORTED"}
+{"id": "geo-04", "domain": "geography", "source_id": "everest", "claim": "The first confirmed ascent of Everest took place on May 29, 1963.", "label": "CONTRADICTED"}
+{"id": "geo-05", "domain": "geography", "source_id": "everest", "claim": "Mount Everest lies on the border between Nepal and India.", "label": "CONTRADICTED"}
+{"id": "geo-06", "domain": "geography", "source_id": "everest", "claim": "Most climbers attempt the summit in October, when the weather is most stable.", "label": "CONTRADICTED"}
+{"id": "geo-07", "domain": "geography", "source_id": "everest", "claim": "The first ascent was funded by the Royal Geographical Society with a grant of 20,000 pounds.", "label": "FABRICATED"}
+{"id": "geo-08", "domain": "geography", "source_id": "everest", "claim": "Climbing Everest is the ultimate dream of every mountaineer.", "label": "UNSUPPORTED"}
+{"id": "bio-01", "domain": "biology", "source_id": "photosynthesis", "claim": "Plants convert light energy into chemical energy through photosynthesis.", "label": "SUPPORTED"}
+{"id": "bio-02", "domain": "biology", "source_id": "photosynthesis", "claim": "Photosynthesis happens mostly in the chloroplasts of leaf cells.", "label": "SUPPORTED"}
+{"id": "bio-03", "domain": "biology", "source_id": "photosynthesis", "claim": "Oxygen is released as a byproduct of photosynthesis.", "label": "SUPPORTED"}
+{"id": "bio-04", "domain": "biology", "source_id": "photosynthesis", "claim": "Chlorophyll absorbs mostly red and blue light.", "label": "SUPPORTED"}
+{"id": "bio-05", "domain": "biology", "source_id": "photosynthesis", "claim": "Chlorophyll absorbs mostly green light.", "label": "CONTRADICTED"}
+{"id": "bio-06", "domain": "biology", "source_id": "photosynthesis", "claim": "Photosynthesis uses oxygen and water and releases carbon dioxide as a byproduct.", "label": "CONTRADICTED"}
+{"id": "bio-07", "domain": "biology", "source_id": "photosynthesis", "claim": "Photosynthesis was first described by Jan Ingenhousz in 1779.", "label": "FABRICATED"}
+{"id": "bio-08", "domain": "biology", "source_id": "photosynthesis", "claim": "Photosynthesis is the most important chemical process on Earth.", "label": "UNSUPPORTED"}
+{"id": "spo-01", "domain": "sports", "source_id": "marathon", "claim": "The official marathon distance is 42.195 kilometers.", "label": "SUPPORTED"}
+{"id": "spo-02", "domain": "sports", "source_id": "marathon", "claim": "The marathon was included in the first modern Olympics in Athens in 1896.", "label": "SUPPORTED"}
+{"id": "spo-03", "domain": "sports", "source_id": "marathon", "claim": "The women's marathon joined the Olympic program in 1984.", "label": "SUPPORTED"}
+{"id": "spo-04", "domain": "sports", "source_id": "marathon", "claim": "Kipchoge's sub-two-hour run in Vienna did not count as an official world record.", "label": "SUPPORTED"}
+{"id": "spo-05", "domain": "sports", "source_id": "marathon", "claim": "The marathon distance was standardized in 1908.", "label": "CONTRADICTED"}
+{"id": "spo-06", "domain": "sports", "source_id": "marathon", "claim": "The women's marathon was added to the Olympic program in 1972.", "label": "CONTRADICTED"}
+{"id": "spo-07", "domain": "sports", "source_id": "marathon", "claim": "Eliud Kipchoge's run in Vienna counted as an official world record.", "label": "CONTRADICTED"}
+{"id": "spo-08", "domain": "sports", "source_id": "marathon", "claim": "Kipchoge wore prototype shoes developed in Portland for the 2019 run.", "label": "FABRICATED"}
+{"id": "civ-01", "domain": "civic", "source_id": "harborview", "claim": "The transit plan adds 12 bus routes.", "label": "SUPPORTED"}
+{"id": "civ-02", "domain": "civic", "source_id": "harborview", "claim": "Light rail service will be extended to the airport.", "label": "SUPPORTED"}
+{"id": "civ-03", "domain": "civic", "source_id": "harborview", "claim": "Construction is expected to cost $240 million.", "label": "SUPPORTED"}
+{"id": "civ-04", "domain": "civic", "source_id": "harborview", "claim": "Priya Raman said the project will not raise property taxes.", "label": "SUPPORTED"}
+{"id": "civ-05", "domain": "civic", "source_id": "harborview", "claim": "Construction is expected to take six years.", "label": "CONTRADICTED"}
+{"id": "civ-06", "domain": "civic", "source_id": "harborview", "claim": "Council member Priya Raman said the project will raise property taxes.", "label": "CONTRADICTED"}
+{"id": "civ-07", "domain": "civic", "source_id": "harborview", "claim": "The plan was drafted by the consulting firm Kessler & Wade.", "label": "FABRICATED"}
+{"id": "civ-08", "domain": "civic", "source_id": "harborview", "claim": "Residents are excited about the new transit plan.", "label": "UNSUPPORTED"}
+{"id": "multi-01", "domain": "multi-doc", "source_ids": ["orion_press", "orion_filing"], "claim": "The Vega 3 battery stores 85 kilowatt-hours.", "label": "SUPPORTED"}
+{"id": "multi-02", "domain": "multi-doc", "source_ids": ["orion_press", "orion_filing"], "claim": "Orion Labs is headquartered in Denver.", "label": "SUPPORTED"}
+{"id": "multi-03", "domain": "multi-doc", "source_ids": ["orion_press", "orion_filing"], "claim": "Marcus Feld said production will begin at the Austin plant.", "label": "SUPPORTED"}
+{"id": "multi-04", "domain": "multi-doc", "source_ids": ["orion_press", "orion_filing"], "claim": "Orion Labs employs about 3,100 people.", "label": "SUPPORTED"}
+{"id": "multi-05", "domain": "multi-doc", "source_ids": ["orion_press", "orion_filing"], "claim": "The Vega 3 battery will cost $12,000.", "label": "CONTRADICTED"}
+{"id": "multi-06", "domain": "multi-doc", "source_ids": ["orion_press", "orion_filing"], "claim": "Orion Labs was founded in 2015.", "label": "CONTRADICTED"}
+{"id": "multi-07", "domain": "multi-doc", "source_ids": ["orion_press", "orion_filing"], "claim": "Orion Labs plans to open a second plant in Reno next year.", "label": "FABRICATED"}
+{"id": "multi-08", "domain": "multi-doc", "source_ids": ["orion_press", "orion_filing"], "claim": "The Vega 3 is the best battery on the market.", "label": "UNSUPPORTED"}

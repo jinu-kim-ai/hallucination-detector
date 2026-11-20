@@ -1,19 +1,20 @@
 """Evaluation harness: precision / recall / F1 over a labeled claim dataset.
 
-Dataset layout (see data/):
+Dataset layout (a directory):
   sources.json          {"<source_id>": "<source document text>", ...}
   labeled_claims.jsonl  one object per line:
-                        {"id", "domain", "source_id", "claim", "label"}
-                        label is one of SUPPORTED / CONTRADICTED / FABRICATED / UNSUPPORTED
+                        {"id", "domain", "source_id" | "source_ids": [...], "claim", "label"}
+                        label is SUPPORTED / CONTRADICTED / FABRICATED / UNSUPPORTED
 """
 from __future__ import annotations
 
 import json
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
-from .detector import HALLUCINATION_LABELS, LABELS, HallucinationDetector
+from .pipeline import HallucinationDetector
+from .schemas import HALLUCINATION_LABELS, LABELS, SourceDocument
 
 
 @dataclass
@@ -62,17 +63,18 @@ class BinaryMetrics:
 def load_dataset(data_dir: str | Path) -> tuple[dict[str, str], list[dict]]:
     data_dir = Path(data_dir)
     sources = json.loads((data_dir / "sources.json").read_text(encoding="utf-8"))
-    rows = [json.loads(l) for l in (data_dir / "labeled_claims.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
-    return sources, rows
+    lines = (data_dir / "labeled_claims.jsonl").read_text(encoding="utf-8").splitlines()
+    return sources, [json.loads(line) for line in lines if line.strip()]
 
 
-def predict_all(detector: HallucinationDetector, sources: dict, rows: list[dict]) -> list[dict]:
+def predict_all(detector: HallucinationDetector, sources: dict[str, str], rows: list[dict]) -> list[dict]:
     preds = []
     for row in rows:
-        res = detector.check_claim(row["claim"], sources[row["source_id"]])
-        preds.append({**row, "pred": res.label, "confidence": res.confidence,
-                      "similarity": res.evidence[0].similarity if res.evidence else 0.0,
-                      "reasons": res.reasons})
+        ids = row.get("source_ids") or [row["source_id"]]
+        verdict = detector.check_claim(row["claim"], [SourceDocument(i, sources[i]) for i in ids])
+        preds.append({**row, "pred": verdict.label, "confidence": verdict.confidence,
+                      "similarity": verdict.citations[0].similarity if verdict.citations else 0.0,
+                      "reasons": verdict.reasons})
     return preds
 
 
@@ -93,7 +95,7 @@ def score(preds: list[dict]) -> dict:
         gold_n = sum(confusion[lab].values())
         per_label[lab] = {"precision": round(tp / pred_n, 3) if pred_n else 0.0,
                           "recall": round(tp / gold_n, 3) if gold_n else 0.0, "support": gold_n}
-    exact = sum(confusion[l][l] for l in LABELS) / len(preds) if preds else 0.0
+    exact = sum(confusion[lab][lab] for lab in LABELS) / len(preds) if preds else 0.0
     return {
         "binary_hallucination_detection": overall.as_dict(),
         "by_domain": {d: m.as_dict() for d, m in sorted(by_domain.items())},
@@ -106,13 +108,13 @@ def score(preds: list[dict]) -> dict:
 def sweep_thresholds(detector: HallucinationDetector, sources, rows, values=None) -> list[dict]:
     """Re-score at several support thresholds; returns rows sorted by binary F1."""
     values = values or [round(0.45 + 0.025 * i, 3) for i in range(13)]
-    original = detector.support_threshold
+    original = detector.config
     out = []
     for v in values:
-        detector.support_threshold = v
+        detector.config = replace(original, support_threshold=v)
         m = score(predict_all(detector, sources, rows))["binary_hallucination_detection"]
         out.append({"support_threshold": v, **m})
-    detector.support_threshold = original
+    detector.config = original
     return sorted(out, key=lambda r: -r["f1"])
 
 
@@ -129,7 +131,8 @@ def format_report(metrics: dict) -> str:
     lines += ["", f"4-way label accuracy: {metrics['four_way_accuracy']:.3f}", "", "Per label:"]
     for lab, m in metrics["per_label"].items():
         lines.append(f"  {lab:<13} P={m['precision']:.3f}  R={m['recall']:.3f}  support={m['support']}")
-    lines += ["", "Confusion (rows = gold, cols = predicted):", "  " + " " * 13 + "".join(f"{l[:5]:>7}" for l in LABELS)]
+    lines += ["", "Confusion (rows = gold, cols = predicted):",
+              "  " + " " * 13 + "".join(f"{lab[:5]:>7}" for lab in LABELS)]
     for g in LABELS:
         lines.append(f"  {g:<13}" + "".join(f"{metrics['confusion'][g][p]:>7}" for p in LABELS))
     return "\n".join(lines)
