@@ -1,0 +1,61 @@
+{
+  "name": "Dravotine dosing and precautions (factual)",
+  "domain": "medication",
+  "question": "I've just been prescribed Dravotine for my blood pressure. How and when should I take it, and is there anything I should avoid while I'm on it?",
+  "description": "A medication answer that paraphrases a patient leaflet and a pharmacy FAQ without adding or changing any facts.",
+  "response": "Dravotine is normally started at a single 40 mg tablet once daily, and your doctor might increase that to 80 mg after four weeks if your blood pressure hasn't come down enough. The best time to take it is in the morning, and food doesn't matter as long as you swallow the tablet whole with some water. If you forget a dose, take it once you remember on the same day, but don't take two tablets to catch up. You should steer clear of potassium supplements and potassium-based salt substitutes, because combining them with Dravotine can push your blood potassium too high. For pain relief, paracetamol is usually a better choice than ibuprofen, which can make Dravotine less effective. Dizziness, headache and a dry cough are the most common side effects, and alcohol can make the dizziness worse.",
+  "sources": [
+    {
+      "id": "dravotine-patient-leaflet",
+      "title": "Dravotine 40 mg tablets: information for the patient",
+      "text": "Dravotine 40 mg tablets are prescribed to lower high blood pressure in adults. The usual starting dose is one 40 mg tablet taken once a day. Your doctor may increase the dose to 80 mg once a day after four weeks if your blood pressure remains high. Take the tablet in the morning, with or without food, and swallow it whole with a glass of water. The most common side effects are dizziness, headache and a dry cough, which affect up to 1 in 10 people. Contact your doctor straight away if you notice swelling of the face, lips or tongue. Do not take Dravotine if you are pregnant or breastfeeding. Dravotine is manufactured by Harrowfield Pharmaceuticals in Kestrel Bay."
+    },
+    {
+      "id": "brightwell-pharmacy-faq",
+      "title": "Brightwell Community Pharmacy: Dravotine frequently asked questions",
+      "text": "If you miss a dose of Dravotine, take it as soon as you remember on the same day, but never take two tablets to make up for a forgotten one. Dravotine should not be combined with potassium supplements or salt substitutes that contain potassium, because this can raise the level of potassium in the blood. Ibuprofen and other anti-inflammatory painkillers can reduce the effect of Dravotine, so paracetamol is usually the preferred painkiller. Drinking alcohol may make the dizziness caused by Dravotine worse. Store the tablets below 25°C in the original blister pack to protect them from moisture. Keep the medicine out of the sight and reach of children. Unused tablets can be returned to any Brightwell branch for safe disposal."
+    }
+  ],
+  "expected": [
+    {
+      "claim": "Dravotine is normally started at a single 40 mg tablet once daily",
+      "label": "SUPPORTED",
+      "why": "Leaflet: the usual starting dose is one 40 mg tablet once a day."
+    },
+    {
+      "claim": "your doctor might increase that to 80 mg after four weeks if your blood pressure hasn't come down enough",
+      "label": "SUPPORTED",
+      "why": "Leaflet: dose may be increased to 80 mg after four weeks if blood pressure remains high."
+    },
+    {
+      "claim": "The best time to take it is in the morning, and food doesn't matter as long as you swallow the tablet whole with some water.",
+      "label": "SUPPORTED",
+      "why": "Leaflet: take in the morning, with or without food, swallowed whole with water."
+    },
+    {
+      "claim": "If you forget a dose, take it once you remember on the same day, but don't take two tablets to catch up.",
+      "label": "SUPPORTED",
+      "why": "Pharmacy FAQ missed-dose advice (second source)."
+    },
+    {
+      "claim": "You should steer clear of potassium supplements and potassium-based salt substitutes, because combining them with Dravotine can push your blood potassium too high.",
+      "label": "SUPPORTED",
+      "why": "Pharmacy FAQ: should not be combined with potassium supplements or potassium salt substitutes because blood potassium can rise."
+    },
+    {
+      "claim": "For pain relief, paracetamol is usually a better choice than ibuprofen, which can make Dravotine less effective.",
+      "label": "SUPPORTED",
+      "why": "Pharmacy FAQ: ibuprofen can reduce the effect of Dravotine; paracetamol is usually preferred."
+    },
+    {
+      "claim": "Dizziness, headache and a dry cough are the most common side effects",
+      "label": "SUPPORTED",
+      "why": "Leaflet lists dizziness, headache and dry cough as the most common side effects."
+    },
+    {
+      "claim": "alcohol can make the dizziness worse",
+      "label": "SUPPORTED",
+      "why": "Pharmacy FAQ: alcohol may make the dizziness caused by Dravotine worse."
+    }
+  ]
+}

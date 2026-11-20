@@ -1,0 +1,56 @@
+{
+  "name": "Blender return and warranty (factual)",
+  "domain": "policy",
+  "question": "I bought a blender from Tallowmere three weeks ago and have used it a few times, but now the motor makes a grinding noise. Can I return it, and if not, what are my options?",
+  "description": "A support-bot answer that paraphrases both the return policy and the warranty terms without adding or changing any facts.",
+  "response": "Your blender is still inside Tallowmere's 30-day return window, which runs from the day it was delivered. Because the blender has been opened and used, a return is only possible if it is defective. You can begin the return on the Orders page of your account, and the system will create a prepaid shipping label for you. Once the blender arrives at the Fernhill distribution centre, your refund should reach your original payment method within 7 business days. Alternatively, the blender is covered by a two-year limited warranty against defects in materials and workmanship, so you could file a claim through the Warranty Claims form with your order number and a photo or short video of the problem. Approved warranty claims are repaired or replaced free of charge, and Tallowmere pays for shipping both ways.",
+  "sources": [
+    {
+      "id": "tallowmere-return-policy",
+      "title": "Tallowmere Home & Kitchen - Returns and Refunds",
+      "text": "Tallowmere Home & Kitchen accepts returns of most items within 30 days of the delivery date. Items must be unused, in their original packaging, and accompanied by the order number. Customers start a return from the Orders page of their online account, which generates a prepaid shipping label. A flat return shipping fee of $6.95 is deducted from the refund unless the item arrived damaged or the wrong item was sent. Refunds are issued to the original payment method within 7 business days after the returned item reaches the Fernhill distribution centre. Opened small appliances can be returned only if they are defective. Clearance items marked Final Sale cannot be returned or exchanged. Orders placed between November 15 and December 24 may be returned until January 31 of the following year."
+    },
+    {
+      "id": "tallowmere-warranty-terms",
+      "title": "Tallowmere Home & Kitchen - Small Appliance Warranty Terms",
+      "text": "Every small appliance sold by Tallowmere Home & Kitchen carries a two-year limited warranty from the date of purchase. The warranty covers defects in materials and workmanship under normal household use. The warranty does not cover damage caused by accidents, misuse, commercial use, or normal wear on parts such as blades and gaskets. To make a claim, customers must submit the order number and a photo or short video of the fault through the Warranty Claims form. Approved claims are resolved by repair or replacement at no charge, and Tallowmere covers the shipping costs in both directions. If an identical replacement is no longer available, the customer receives store credit equal to the original purchase price. Cookware sold under the Tallowmere Hearth label carries a separate lifetime warranty against warping."
+    }
+  ],
+  "expected": [
+    {
+      "claim": "Your blender is still inside Tallowmere's 30-day return window, which runs from the day it was delivered.",
+      "label": "SUPPORTED",
+      "why": "Return policy: returns accepted within 30 days of the delivery date (three weeks is inside that)."
+    },
+    {
+      "claim": "Because the blender has been opened and used, a return is only possible if it is defective.",
+      "label": "SUPPORTED",
+      "why": "Return policy: opened small appliances can be returned only if they are defective."
+    },
+    {
+      "claim": "You can begin the return on the Orders page of your account, and the system will create a prepaid shipping label for you.",
+      "label": "SUPPORTED",
+      "why": "Return policy: returns start from the Orders page, which generates a prepaid shipping label."
+    },
+    {
+      "claim": "Once the blender arrives at the Fernhill distribution centre, your refund should reach your original payment method within 7 business days.",
+      "label": "SUPPORTED",
+      "why": "Return policy: refunds go to the original payment method within 7 business days after the item reaches Fernhill."
+    },
+    {
+      "claim": "the blender is covered by a two-year limited warranty against defects in materials and workmanship",
+      "label": "SUPPORTED",
+      "why": "Warranty terms: small appliances carry a two-year limited warranty covering defects in materials and workmanship."
+    },
+    {
+      "claim": "you could file a claim through the Warranty Claims form with your order number and a photo or short video of the problem",
+      "label": "SUPPORTED",
+      "why": "Warranty terms: claims need the order number and a photo or short video via the Warranty Claims form."
+    },
+    {
+      "claim": "Approved warranty claims are repaired or replaced free of charge, and Tallowmere pays for shipping both ways.",
+      "label": "SUPPORTED",
+      "why": "Warranty terms: approved claims are repaired or replaced at no charge and Tallowmere covers shipping in both directions."
+    }
+  ]
+}

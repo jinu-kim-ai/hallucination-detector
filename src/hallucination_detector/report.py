@@ -31,7 +31,9 @@ def to_text(report: Report, color: bool = True) -> str:
             lines.append(f"      checked as: {v.claim.resolved_text}")
         for c in v.citations[:1]:
             lines.append(f"      evidence [{c.source_id} #{c.sentence_index}] ({c.similarity:.2f}): {c.quote}")
-        for reason in v.reasons[1:] if v.reasons[:1] and v.reasons[0].startswith("best evidence") else v.reasons:
+        # the evidence line already shows the best similarity; an uncited claim keeps it as a reason
+        shown = bool(v.citations) and v.reasons[:1] and v.reasons[0].startswith("best evidence")
+        for reason in v.reasons[1:] if shown else v.reasons:
             lines.append(f"      - {reason}")
     for w in report.warnings:
         lines.append(f"warning: {w}")

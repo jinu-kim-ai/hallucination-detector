@@ -66,6 +66,7 @@ class ClaimVerdict:
     confidence: float
     reasons: list[str] = field(default_factory=list)
     citations: list[Citation] = field(default_factory=list)
+    best_similarity: float = 0.0     # closest source sentence, cited or not (none is cited below related_threshold)
 
     @property
     def is_hallucination(self) -> bool:
@@ -78,6 +79,7 @@ class ClaimVerdict:
             "response_span": [self.claim.start, self.claim.end],
             "label": self.label,
             "confidence": round(self.confidence, 3),
+            "best_similarity": round(self.best_similarity, 3),
             "reasons": self.reasons,
             "citations": [c.to_dict() for c in self.citations],
         }

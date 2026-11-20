@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
+from collections import OrderedDict
 from dataclasses import dataclass
 
 import numpy as np
 
+from .config import Config
 from .schemas import Sentence
 
 
@@ -59,9 +62,11 @@ class SourceIndex:
 
 
 class Retriever:
-    def __init__(self, embedder):
+    def __init__(self, embedder, cache_size: int = Config.cache_size):
         self.embedder = embedder
-        self._cache: dict[str, np.ndarray] = {}     # document hash -> sentence embeddings
+        self.cache_size = max(1, cache_size)
+        # document hash -> sentence embeddings; LRU so a long-lived detector does not grow forever
+        self._cache: OrderedDict[str, np.ndarray] = OrderedDict()
 
     def index(self, per_document: list[tuple[str, list[Sentence]]]) -> SourceIndex:
         """per_document: (document text, its sentences) pairs. Embeddings are cached per document."""
@@ -70,16 +75,27 @@ class Retriever:
             texts.append(text)
             if not sents:
                 continue
-            key = hashlib.sha1((self.embedder.name + "\0" + "\0".join(s.text for s in sents)).encode()).hexdigest()
-            if key not in self._cache:
-                self._cache[key] = self.embedder.encode([s.text for s in sents])
             sentences.extend(sents)
-            blocks.append(self._cache[key])
+            blocks.append(self._embeddings(sents))
         matrix = np.vstack(blocks) if blocks else np.zeros((0, 1), dtype=np.float32)
         return SourceIndex(sentences, matrix, "\n".join(texts).lower())
 
+    def _embeddings(self, sents: list[Sentence]) -> np.ndarray:
+        texts = [s.text for s in sents]
+        # JSON keeps sentence boundaries unambiguous, whatever characters the sentences contain
+        key = hashlib.sha1(json.dumps([self.embedder.name, texts]).encode()).hexdigest()
+        if key in self._cache:
+            self._cache.move_to_end(key)
+        else:
+            self._cache[key] = self.embedder.encode(texts)
+            while len(self._cache) > self.cache_size:
+                self._cache.popitem(last=False)
+        return self._cache[key]
+
     def search(self, index: SourceIndex, query: str, k: int) -> list[tuple[int, float]]:
         """(sentence position, cosine similarity) for the k closest sentences, best first."""
+        if k < 1:      # [:0] would cite nothing and [:-1] would drop the worst hit, both silently
+            raise ValueError(f"k must be at least 1, got {k}")
         if not index.sentences:
             return []
         sims = index.matrix @ self.embedder.encode([query])[0]

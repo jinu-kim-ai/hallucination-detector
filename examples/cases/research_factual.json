@@ -1,0 +1,71 @@
+{
+  "name": "Napping study summary (faithful)",
+  "domain": "research",
+  "question": "Can you summarise the Varnhollow napping study for my psychology essay? What did they find, and what are the limitations?",
+  "description": "A study summary that paraphrases the paper abstract and the university news article without adding or changing any facts, including limitations that only the news article mentions.",
+  "response": "The Varnhollow study, led by Dr. Halvora Brenquist of the university's Department of Psychology, tested whether a brief afternoon nap improves working memory in undergraduates. Each of the 84 students attended two lab sessions a week apart, napping for 20 minutes in one and resting quietly while awake in the other. After napping, students scored roughly 11 percent higher on a digit-span test, but their results on a spatial n-back task showed no significant difference. Students who had slept under six hours the night before gained the most. On the limitations side, everyone was recruited from one campus and tested in a quiet lab, so the effect might not carry over to a noisy dorm or library. The design also cannot show whether the boost lasts past the afternoon, and the team plans a follow-up that tracks students across a full semester.",
+  "sources": [
+    {
+      "id": "brenquist-napping-abstract",
+      "title": "Midday Napping and Working Memory in Undergraduate Students: A Randomized Crossover Trial (abstract)",
+      "text": "Short daytime naps are widely recommended to students, but their effect on working memory has rarely been tested under controlled conditions. In this randomized crossover trial, 84 undergraduate students aged 18 to 24 each completed two laboratory sessions held one week apart. In one session participants took a 20-minute nap at 1:30 p.m., and in the other they rested quietly while awake for the same period. Working memory was measured 30 minutes later with a digit-span task and a spatial n-back task. Scores on the digit-span task were on average 11 percent higher after the nap than after quiet rest. Performance on the spatial n-back task did not differ significantly between the two conditions. Participants who reported sleeping less than six hours the previous night showed the largest benefit. Because the study included only one session per condition and measured performance within an hour of waking, it cannot show whether the effect lasts beyond the afternoon."
+    },
+    {
+      "id": "varnhollow-news-napping",
+      "title": "Varnhollow study finds short naps sharpen students' recall",
+      "text": "A team at Varnhollow University's Department of Psychology has found that a short afternoon nap can give students a measurable boost on certain memory tasks. The study was led by Dr. Halvora Brenquist, an associate professor who has researched sleep and learning for over a decade, with doctoral student Tomas Elderwick as co-author. The research was funded by the Pellmarsh Foundation for Learning Science and published in the Journal of Applied Cognitive Rest. Brenquist said the results suggest that a brief nap is most useful for students who are already short on sleep. She cautioned that the study took place in a quiet laboratory and that napping in a noisy dormitory or library may not produce the same effect. The team also noted that all participants were recruited from a single campus, which limits how far the findings can be generalised. A follow-up study tracking students over a full semester is planned to begin next spring."
+    }
+  ],
+  "expected": [
+    {
+      "claim": "The Varnhollow study, led by Dr. Halvora Brenquist of the university's Department of Psychology, tested whether a brief afternoon nap improves working memory in undergraduates.",
+      "label": "SUPPORTED",
+      "why": "The news article names Brenquist and the Department of Psychology; the abstract describes a nap vs. working memory trial in undergraduates."
+    },
+    {
+      "claim": "Each of the 84 students attended two lab sessions a week apart",
+      "label": "SUPPORTED",
+      "why": "Abstract: 84 undergraduates each completed two laboratory sessions one week apart."
+    },
+    {
+      "claim": "napping for 20 minutes in one and resting quietly while awake in the other",
+      "label": "SUPPORTED",
+      "why": "Abstract: a 20-minute nap in one session, quiet wakeful rest in the other."
+    },
+    {
+      "claim": "After napping, students scored roughly 11 percent higher on a digit-span test",
+      "label": "SUPPORTED",
+      "why": "Abstract: digit-span scores were on average 11 percent higher after the nap."
+    },
+    {
+      "claim": "their results on a spatial n-back task showed no significant difference",
+      "label": "SUPPORTED",
+      "why": "Abstract: spatial n-back performance did not differ significantly between conditions."
+    },
+    {
+      "claim": "Students who had slept under six hours the night before gained the most.",
+      "label": "SUPPORTED",
+      "why": "Abstract: participants sleeping less than six hours showed the largest benefit."
+    },
+    {
+      "claim": "everyone was recruited from one campus and tested in a quiet lab",
+      "label": "SUPPORTED",
+      "why": "News article: all participants came from a single campus and the study took place in a quiet laboratory."
+    },
+    {
+      "claim": "so the effect might not carry over to a noisy dorm or library",
+      "label": "SUPPORTED",
+      "why": "News article: napping in a noisy dormitory or library may not produce the same effect."
+    },
+    {
+      "claim": "The design also cannot show whether the boost lasts past the afternoon",
+      "label": "SUPPORTED",
+      "why": "Abstract: it cannot show whether the effect lasts beyond the afternoon."
+    },
+    {
+      "claim": "the team plans a follow-up that tracks students across a full semester",
+      "label": "SUPPORTED",
+      "why": "News article: a follow-up study tracking students over a full semester is planned."
+    }
+  ]
+}

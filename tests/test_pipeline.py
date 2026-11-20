@@ -1,7 +1,13 @@
 """End-to-end behaviour, including the edge cases listed in PLAN.md section 4."""
+from dataclasses import replace
+
 import pytest
 
-from hallucination_detector import CONTRADICTED, FABRICATED, SUPPORTED, UNSUPPORTED
+from hallucination_detector import (
+    CONTRADICTED, FABRICATED, SUPPORTED, UNSUPPORTED, HallucinationDetector,
+)
+from hallucination_detector.pipeline import _looks_english
+from hallucination_detector.schemas import SourceDocument
 
 MISSION = {"id": "mission", "title": "Mission summary",
            "text": "Apollo 11 launched from Kennedy Space Center on July 16, 1969. "
@@ -36,6 +42,14 @@ def test_fabricated_details(detector, apollo):
 def test_unsupported_opinion(detector, apollo):
     v = detector.check_claim("The astronauts felt very nervous during the descent.", apollo)
     assert v.label == UNSUPPORTED
+
+
+def test_claim_without_related_evidence_cites_nothing(detector, apollo):
+    # PLAN section 3: an unrelated best sentence is not evidence, but its similarity is still reported
+    v = detector.detect("The crew felt nervous.", apollo).verdicts[0]
+    assert v.label == UNSUPPORTED and v.citations == []
+    assert v.reasons[0].startswith("best evidence similarity 0.")
+    assert v.to_dict()["citations"] == []
 
 
 # ---------------------------------------------------------------- negation and relations
@@ -85,6 +99,38 @@ def test_conflicting_sources_raise_a_warning(detector):
     assert {c.source_id for c in report.verdicts[0].citations} == {"encyclopedia", "blog"}
 
 
+@pytest.mark.parametrize("fixture", ["detector", "detector_no_nli"])
+def test_number_word_in_another_source_is_not_a_conflict(request, fixture):
+    # the blog never gives a year; "two researchers" is not a rival to "1921"
+    docs = [{"id": "encyclopedia", "text": "Insulin was first isolated in 1921 by Banting and Best."},
+            {"id": "blog", "text": "Insulin was first isolated by Banting and Best, two Canadian researchers."}]
+    report = request.getfixturevalue(fixture).detect("Insulin was first isolated in 1921 by Banting and Best.", docs)
+    assert report.verdicts[0].label == SUPPORTED
+    assert not any("sources conflict" in w for w in report.warnings)
+
+
+@pytest.mark.parametrize("fixture", ["detector", "detector_no_nli"])
+def test_sources_that_disagree_with_each_other_raise_a_warning(request, fixture):
+    # both sources contradict the claim, and they also give different years from each other
+    docs = [{"id": "encyclopedia", "text": "Insulin was first isolated in 1921 by Banting and Best."},
+            {"id": "blog", "text": "Insulin was first isolated in 1925 by Banting and Best."}]
+    report = request.getfixturevalue(fixture).detect("Insulin was first isolated in 1923 by Banting and Best.", docs)
+    assert report.verdicts[0].label == CONTRADICTED
+    assert report.warnings == ["sources conflict on claim 1: 'encyclopedia' and 'blog' disagree with each other"]
+
+
+def test_fact_spread_over_two_sentences(detector, monkeypatch):
+    source = "Marie Curie was born in 1867. She was born in Warsaw, Poland."
+    claim = "Marie Curie was born in Warsaw in 1867."
+    v = detector.check_claim(claim, source)
+    assert v.label == SUPPORTED
+    assert {c.sentence_index for c in v.citations} == {0, 1}          # each sentence used is cited
+    # with neighbor sentences in the NLI premise, the joined fact is entailed outright
+    monkeypatch.setattr(detector, "config", replace(detector.config, nli_context_sentences=1))
+    v = detector.check_claim(claim, source)
+    assert v.label == SUPPORTED and v.citations[0].nli["entailment"] >= detector.config.nli_threshold
+
+
 def test_one_source_as_plain_string(detector, apollo):
     report = detector.detect("Apollo 11 launched from Kennedy Space Center on July 16, 1969.", apollo)
     assert report.verdicts[0].citations[0].source_id == "source-1"
@@ -107,10 +153,38 @@ def test_response_without_claims_has_no_score(detector, apollo, response):
     assert any("no checkable claims" in w for w in report.warnings)
 
 
-def test_non_english_response_is_flagged_not_scored(detector, apollo):
-    report = detector.detect("아폴로 11호는 1969년 7월 16일 케네디 우주 센터에서 발사되었습니다.", apollo)
-    assert report.reliability_score is None
+@pytest.mark.parametrize("response", [
+    "아폴로 11호는 1969년 7월 16일 케네디 우주 센터에서 발사되었습니다.",
+    "아폴로 11호는 1969년 발사",                                                      # short: 8 letters
+    "Apollo 11 a été lancé depuis le centre spatial Kennedy le 16 juillet 1969.",
+    "El Apolo 11 fue lanzado desde el Centro Espacial Kennedy el 16 de julio de 1969. "
+    "Los astronautas recogieron 45 kilogramos de muestras.",
+    "Die Astronauten sammelten etwa 21,5 Kilogramm Mondgestein.",
+    "A Apollo 11 foi lançada do Centro Espacial Kennedy em 16 de julho de 1969.",
+    "Gli astronauti hanno raccolto circa 21,5 chilogrammi di campioni lunari.",
+    "De astronauten verzamelden ongeveer 21,5 kilogram maanstenen.",
+])
+def test_non_english_response_is_flagged_not_scored(detector, apollo, response):
+    report = detector.detect(response, apollo)
+    assert report.reliability_score is None and report.unscorable and report.verdicts == []
     assert any("English" in w for w in report.warnings)
+
+
+@pytest.mark.parametrize("text", [
+    "Apollo 11 launched in 1969.",
+    "Is that right?",
+    "Pelé scored 1000 goals for Santos FC in Brazil between 1956 and 1974.",
+    "Müller won.",
+    "The café on Rue de la Paix serves crème brûlée.",
+    "Pedro de la Rosa drove for Arrows, Jaguar and McLaren.",
+    "Die Hard was released in 1988 starring Bruce Willis.",
+    "Real Madrid won La Liga in 2022 under Carlo Ancelotti.",
+    "Apple Inc. CEO Tim Cook announced iPhone 15 Pro Max pricing.",
+    "Q3 revenue rose 14% to $412M; EPS $1.32 vs $1.10.",
+    "Angela Merkel, Emmanuel Macron, Pedro Sánchez and Giorgia Meloni met in Brussels on 12 March 2023.",
+])
+def test_english_with_names_numbers_or_accents_counts_as_english(text):
+    assert _looks_english(text)
 
 
 # ---------------------------------------------------------------- claim handling inside detect()
@@ -139,8 +213,39 @@ def test_repeated_claim_is_scored_once(detector, apollo):
     assert len(twice.scored) == 2 and twice.hallucination_rate == 0.5
 
 
+def test_sentence_cache_is_a_bounded_lru(nlp):
+    detector = HallucinationDetector(nlp=nlp, use_nli=False, embedder="hashing", cache_size=2)
+    a, b, c = (SourceDocument(i, f"Document {i} says the bridge opened in 19{n}0.") for n, i in enumerate("abc"))
+    for doc in (a, b, a, c):                       # reading `a` again makes `b` the least recently used
+        detector._split(doc)
+    assert [key[0] for key in detector._sentence_cache] == ["a", "c"]
+    assert detector.retriever.cache_size == 2
+
+
+def test_uncited_claim_keeps_its_best_similarity(detector, apollo):
+    verdict = detector.detect("The astronauts felt very nervous during the descent.", apollo).verdicts[0]
+    assert verdict.citations == [] and 0 < verdict.best_similarity < detector.config.related_threshold
+    assert verdict.to_dict()["best_similarity"] == round(verdict.best_similarity, 3)
+
+
 def test_report_records_its_configuration(detector, detector_no_nli, apollo):
     assert detector.detect("Apollo 11 launched in 1969.", apollo).config["use_nli"] is True
     report = detector_no_nli.detect("Apollo 11 launched in 1969.", apollo)
     assert report.config["use_nli"] is False and report.config["nli_model"] is None
     assert report.verdicts[0].citations[0].nli is None
+
+
+@pytest.mark.parametrize("source, claim", [
+    ("The company reported revenue of $2,100 million for the year.", "The company reported revenue of $2.1 billion for the year."),
+    ("The tower has 21 floors.", "The tower has twenty-one floors."),
+])
+def test_number_written_differently_is_not_an_nli_contradiction(detector, source, claim):
+    verdict = detector.check_claim(claim, source)
+    assert verdict.label == SUPPORTED
+    assert any("written differently" in r for r in verdict.reasons)
+
+
+def test_different_amount_is_still_contradicted(detector):
+    verdict = detector.check_claim("The company reported revenue of $3.1 billion for the year.",
+                                   "The company reported revenue of $2.1 billion for the year.")
+    assert verdict.label == CONTRADICTED

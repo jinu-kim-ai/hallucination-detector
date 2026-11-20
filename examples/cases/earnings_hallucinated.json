@@ -1,0 +1,32 @@
+{
+  "name": "Quarterly earnings summary (with hallucinations)",
+  "domain": "earnings",
+  "question": "Can you summarise Corvane Systems' third-quarter fiscal 2026 results for me, including growth, margins, guidance and anything notable from the investor call?",
+  "description": "An earnings summary that mixes correct figures with a wrong number, a misattributed executive, swapped regions, a reversed hiring plan, an invented buyback and an unsupported opinion.",
+  "response": "Corvane Systems reported third-quarter fiscal 2026 revenue of $412 million, up 14 percent from a year earlier. Gross margin improved to 46.2 percent, which CFO Marisol Atwater credited to lower component costs and a richer product mix. Operating income rose to $64 million, for an operating margin of 14.1 percent. The company raised its full-year revenue guidance to between $1.62 billion and $1.65 billion. On the call, management noted that European sales grew 22 percent while Asia-Pacific sales were flat, and said the board had authorised a new $150 million share buyback. Corvane ended the quarter with 3,870 employees and plans to expand its workforce in the fourth quarter. Overall, this was a standout quarter that leaves Corvane well positioned to keep outgrowing its competitors.",
+  "sources": [
+    {
+      "id": "q3-press-release",
+      "title": "Corvane Systems reports third-quarter fiscal 2026 results",
+      "text": "Corvane Systems, a maker of industrial sensing equipment based in Tillbury, reported revenue of $412 million for the third quarter of fiscal 2026. Revenue grew 14 percent compared with the same quarter a year earlier, driven mainly by demand for its Halden line of vibration monitors. Gross margin was 46.2 percent, up from 43.8 percent in the prior-year quarter. Operating income rose to $58 million, giving an operating margin of 14.1 percent. The company raised its full-year revenue guidance to between $1.62 billion and $1.65 billion. Chief Executive Officer Marisol Atwater said the quarter showed that customers are willing to pay for reliability. Corvane ended the quarter with 3,870 employees."
+    },
+    {
+      "id": "q3-investor-call",
+      "title": "Corvane Systems Q3 fiscal 2026 investor call summary",
+      "text": "During the investor call, Chief Financial Officer Desmond Okafor said the gross margin improvement came mostly from lower component costs and a richer product mix. Okafor noted that the company does not plan to increase headcount in the fourth quarter, apart from replacing employees who leave. Sales in the Asia-Pacific region grew 22 percent, while European sales were flat. Atwater told analysts that Halden monitors now account for roughly one third of total revenue. The company expects fourth-quarter gross margin to be slightly lower than in the third quarter because of a planned retooling at its Brenmoor plant. Okafor said Corvane repurchased $25 million of its shares during the quarter. Management declined to provide guidance for fiscal 2027."
+    }
+  ],
+  "expected": [
+    {"claim": "Corvane Systems reported third-quarter fiscal 2026 revenue of $412 million, up 14 percent from a year earlier.", "label": "SUPPORTED", "why": "Press release: $412 million revenue, up 14 percent year over year."},
+    {"claim": "Gross margin improved to 46.2 percent", "label": "SUPPORTED", "why": "Press release: gross margin 46.2 percent, up from 43.8 percent."},
+    {"claim": "which CFO Marisol Atwater credited to lower component costs and a richer product mix", "label": "CONTRADICTED", "why": "Wrong name: the CFO who gave this explanation is Desmond Okafor; Marisol Atwater is the CEO."},
+    {"claim": "Operating income rose to $64 million", "label": "CONTRADICTED", "why": "Wrong number: the press release gives operating income of $58 million."},
+    {"claim": "for an operating margin of 14.1 percent", "label": "SUPPORTED", "why": "Press release: operating margin of 14.1 percent."},
+    {"claim": "The company raised its full-year revenue guidance to between $1.62 billion and $1.65 billion.", "label": "SUPPORTED", "why": "Press release states this guidance range."},
+    {"claim": "European sales grew 22 percent while Asia-Pacific sales were flat", "label": "CONTRADICTED", "why": "Wrong place: the call summary says Asia-Pacific grew 22 percent and Europe was flat."},
+    {"claim": "said the board had authorised a new $150 million share buyback", "label": "FABRICATED", "why": "No source mentions a $150 million authorisation; the only buyback figure is $25 million repurchased during the quarter."},
+    {"claim": "Corvane ended the quarter with 3,870 employees", "label": "SUPPORTED", "why": "Press release: 3,870 employees at quarter end."},
+    {"claim": "plans to expand its workforce in the fourth quarter", "label": "CONTRADICTED", "why": "Reversed meaning: the CFO said the company does not plan to increase headcount in Q4 beyond replacing leavers."},
+    {"claim": "Overall, this was a standout quarter that leaves Corvane well positioned to keep outgrowing its competitors.", "label": "UNSUPPORTED", "why": "Opinion; neither source compares Corvane with competitors or characterises the quarter this way."}
+  ]
+}

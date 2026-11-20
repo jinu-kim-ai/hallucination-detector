@@ -11,7 +11,9 @@
     "nli_threshold": 0.7,
     "nli_top_k": 3,
     "nli_context_sentences": 0,
-    "min_claim_words": 3
+    "min_claim_words": 3,
+    "min_source_words": 3,
+    "max_sentence_words": 120
   },
   "metrics": {
     "binary_hallucination_detection": {
@@ -458,7 +460,7 @@
       "similarity": 0.9577376842498779,
       "reasons": [
         "best evidence similarity 0.96",
-        "number mismatch: claim says 12, evidence says 14, 1922",
+        "number mismatch: claim says 12, evidence says 14",
         "DATE mismatch: claim says '12-year-old', evidence says '14-year-old'"
       ]
     },
@@ -581,7 +583,7 @@
       "similarity": 0.9803686738014221,
       "reasons": [
         "best evidence similarity 0.98",
-        "number mismatch: claim says 2018, evidence says 1, 2, 2020",
+        "number mismatch: claim says 2018, evidence says 2020",
         "DATE mismatch: claim says 'January 1, 2018', evidence says 'January 1, 2020'"
       ]
     },
@@ -634,11 +636,11 @@
       "claim": "The Python Software Foundation has an annual budget of $9 million.",
       "label": "FABRICATED",
       "pred": "FABRICATED",
-      "confidence": 0.865,
+      "confidence": 0.765,
       "similarity": 0.6712255477905273,
       "reasons": [
         "best evidence similarity 0.67",
-        "not found in source: 1e+06, 9"
+        "not found in source: 9 million"
       ]
     },
     {
@@ -719,7 +721,7 @@
       "similarity": 0.7541196346282959,
       "reasons": [
         "best evidence similarity 0.75",
-        "number mismatch: claim says 73, evidence says 37, 1e+06"
+        "number mismatch: claim says 73 million, evidence says 37 million"
       ]
     },
     {
@@ -760,7 +762,7 @@
       "similarity": 0.37861695885658264,
       "reasons": [
         "best evidence similarity 0.38",
-        "not found in source: 200"
+        "not found in source: 200 million"
       ]
     },
     {

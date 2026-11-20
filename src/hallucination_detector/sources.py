@@ -5,9 +5,11 @@ import json
 import re
 from pathlib import Path
 
+from .config import Config
 from .schemas import Sentence, SourceDocument
 
-MAX_SENTENCE_WORDS = 120      # the embedder truncates around 256 word pieces; split before that
+MAX_SENTENCE_WORDS = Config.max_sentence_words    # the embedder truncates around 256 word pieces; split before that
+MIN_SOURCE_WORDS = Config.min_source_words
 
 
 def as_documents(sources) -> list[SourceDocument]:
@@ -16,56 +18,156 @@ def as_documents(sources) -> list[SourceDocument]:
         return []
     if isinstance(sources, (str, SourceDocument, dict)):
         sources = [sources]
-    docs: list[SourceDocument] = []
-    for i, s in enumerate(sources, 1):
-        if isinstance(s, SourceDocument):
-            docs.append(s)
-        elif isinstance(s, dict):
-            docs.append(SourceDocument(str(s.get("id") or f"source-{i}"), s.get("text") or "", s.get("title") or ""))
-        else:
-            docs.append(SourceDocument(f"source-{i}", str(s)))
-    ids = [d.id for d in docs]
-    if len(set(ids)) != len(ids):
-        raise ValueError(f"source ids must be unique, got {ids}")
-    return docs
+    sources = list(sources)
+    given = [g for g in map(_given_id, sources) if g is not None]
+    duplicates = sorted({g for g in given if given.count(g) > 1})
+    if duplicates:
+        raise ValueError(f"source ids must be unique, got duplicates {duplicates}")
+    taken = set(given)          # generated ids must not take an id the caller chose for a later source
+    return [_as_document(s, i, taken) for i, s in enumerate(sources, 1)]
+
+
+def _given_id(source) -> str | None:
+    if isinstance(source, SourceDocument):
+        return source.id
+    if isinstance(source, dict) and source.get("id") is not None and str(source["id"]) != "":
+        return str(source["id"])          # str() keeps a falsy id such as 0
+    return None
+
+
+def _as_document(source, position: int, taken: set[str]) -> SourceDocument:
+    doc_id = _given_id(source) or _free_id(f"source-{position}", taken)
+    if isinstance(source, SourceDocument):
+        _check_text(source.text, doc_id, "text")
+        return source
+    if isinstance(source, dict):
+        return SourceDocument(doc_id, _check_text(source.get("text"), doc_id, "text"),
+                              _check_text(source.get("title"), doc_id, "title"))
+    return SourceDocument(doc_id, _check_text(source, doc_id, "text"))
+
+
+def _check_text(value, doc_id: str, field: str) -> str:
+    """Missing / None text is blank; anything else that is not a string would crash deep in the pipeline."""
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        raise ValueError(f"source '{doc_id}': field '{field}' must be a string, got {type(value).__name__}")
+    return value
+
+
+def _free_id(base: str, taken: set[str]) -> str:
+    doc_id, n = base, 2
+    while doc_id in taken:
+        doc_id, n = f"{base}#{n}", n + 1
+    taken.add(doc_id)
+    return doc_id
 
 
 def load_request(path: str | Path) -> tuple[str, list[SourceDocument]]:
     """Read {"response": ..., "sources": [{"id", "title", "text"}, ...]} from a JSON file."""
-    data = json.loads(Path(path).read_text(encoding="utf-8"))
-    if "response" not in data:
-        raise ValueError(f"{path}: missing required field 'response'")
-    return data["response"], as_documents(data.get("sources", []))
+    try:
+        data = json.loads(_read_text(Path(path)))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{path}: not valid JSON ({exc})") from exc
+    if not isinstance(data, dict):
+        raise ValueError(f"{path}: expected a JSON object with 'response' and 'sources'")
+    for field, kind in (("response", str), ("sources", list)):
+        if field not in data:
+            raise ValueError(f"{path}: missing required field '{field}'")
+        if not isinstance(data[field], kind):
+            raise ValueError(f"{path}: field '{field}' must be a {'string' if kind is str else 'list'}, "
+                             f"got {type(data[field]).__name__}")
+    try:
+        return data["response"], as_documents(data["sources"])
+    except ValueError as exc:
+        raise ValueError(f"{path}: {exc}") from exc
 
 
 def load_text_sources(paths: list[str | Path]) -> list[SourceDocument]:
-    """One document per text file; the file name is the id."""
-    docs, seen = [], set()
+    """One document per text file; the file name is the id (the path, then a #n suffix, if that is taken)."""
+    docs, used = [], set()
     for p in map(Path, paths):
-        doc_id = p.name if p.name not in seen else str(p)
-        seen.add(p.name)
-        docs.append(SourceDocument(doc_id, p.read_text(encoding="utf-8")))
+        doc_id = _free_id(p.name if p.name not in used else str(p), used)
+        docs.append(SourceDocument(doc_id, _read_text(p)))
     return docs
 
 
-def split_sentences(doc: SourceDocument, nlp, min_words: int = 3) -> tuple[list[Sentence], list[str]]:
+def _read_text(path: Path) -> str:
+    # utf-8-sig drops a BOM (PowerShell and Notepad write one); newline="" keeps \r\n so spans index the real file
+    with path.open(encoding="utf-8-sig", newline="") as fh:
+        return fh.read()
+
+
+def split_sentences(doc: SourceDocument, nlp, min_words: int = MIN_SOURCE_WORDS,
+                    max_words: int = MAX_SENTENCE_WORDS) -> tuple[list[Sentence], list[str]]:
     """Sentences of one document (with spans into doc.text) and any warnings."""
     warnings: list[str] = []
-    if not doc.text.strip():
+    if not re.search(r"\w", doc.text):              # blank, or only a BOM / zero-width spaces / punctuation
         return [], warnings
+    found = [(a, b) for a, b in (_trim(doc.text, s, e) for s, e in _sentence_bounds(doc.text, nlp)) if a < b]
     spans: list[tuple[int, int]] = []
-    for sent in nlp(doc.text).sents:
-        start, end = _trim(doc.text, sent.start_char, sent.end_char)
-        if len(doc.text[start:end].split()) < min_words:
+    for start, end in found:
+        words = len(doc.text[start:end].split())
+        if words < min_words:
             continue
-        if len(doc.text[start:end].split()) > MAX_SENTENCE_WORDS:
-            warnings.append(f"source '{doc.id}': a sentence of over {MAX_SENTENCE_WORDS} words was split into parts")
-            spans.extend(_split_long(doc.text, start, end))
+        if words > max_words:
+            warnings.append(f"source '{doc.id}': a sentence of over {max_words} words was split into parts")
+            spans.extend(_split_long(doc.text, start, end, max_words))
         else:
             spans.append((start, end))
     if not spans:                                   # e.g. a two-word document: keep it as one unit
-        spans = [_trim(doc.text, 0, len(doc.text))]
+        spans = _group_short(doc.text, found or [_trim(doc.text, 0, len(doc.text))], max_words)
+        if len(spans) > 1:
+            warnings.append(f"source '{doc.id}': a passage of over {max_words} words was split into parts")
     return [Sentence(doc.id, i, doc.text[a:b], a, b) for i, (a, b) in enumerate(spans)], warnings
+
+
+def _sentence_bounds(text: str, nlp) -> list[tuple[int, int]]:
+    """spaCy sentence spans; text over nlp.max_length is parsed in chunks, offsets shifted back into `text`."""
+    bounds = []
+    for offset, chunk in _chunks(text, getattr(nlp, "max_length", 1_000_000)):
+        bounds.extend((offset + s.start_char, offset + s.end_char) for s in nlp(chunk).sents)
+    return bounds
+
+
+def _chunks(text: str, limit: int) -> list[tuple[int, str]]:
+    """(offset, chunk) pieces of at most `limit` characters, cut at the best boundary available."""
+    out, start = [], 0
+    while len(text) - start > limit:
+        cut = _cut_point(text, start, start + limit)
+        out.append((start, text[start:cut]))
+        start = cut
+    out.append((start, text[start:]))
+    return out
+
+
+def _cut_point(text: str, lo: int, hi: int) -> int:
+    """Last paragraph break, line break, sentence end or space in the back half of text[lo:hi]."""
+    mid = lo + (hi - lo) // 2                       # cutting in the back half keeps the chunk count linear
+    window = text[mid:hi]
+    for pattern in (r"\n\s*\n", r"\n", r"[.!?][\"')\]]*\s", r"\s"):
+        last = None
+        for last in re.finditer(pattern, window):
+            pass
+        if last is not None:
+            return mid + last.end()
+    return hi                                       # one enormous token: a hard cut is all that is left
+
+
+def _group_short(text: str, spans: list[tuple[int, int]], max_words: int) -> list[tuple[int, int]]:
+    """Join consecutive short sentences into units of at most `max_words` words."""
+    pieces = [p for a, b in spans
+              for p in (_split_long(text, a, b, max_words) if len(text[a:b].split()) > max_words else [(a, b)])]
+    groups: list[tuple[int, int]] = []
+    words = 0
+    for a, b in pieces:
+        n = len(text[a:b].split())
+        if groups and words + n <= max_words:
+            groups[-1], words = (groups[-1][0], b), words + n
+        else:
+            groups.append((a, b))
+            words = n
+    return groups
 
 
 def _trim(text: str, start: int, end: int) -> tuple[int, int]:
@@ -76,13 +178,13 @@ def _trim(text: str, start: int, end: int) -> tuple[int, int]:
     return start, end
 
 
-def _split_long(text: str, start: int, end: int) -> list[tuple[int, int]]:
-    """Cut an over-long sentence at semicolons / commas into pieces of at most MAX_SENTENCE_WORDS words."""
+def _split_long(text: str, start: int, end: int, max_words: int = MAX_SENTENCE_WORDS) -> list[tuple[int, int]]:
+    """Cut an over-long sentence at semicolons / commas into pieces of at most `max_words` words."""
     pieces, piece_start, words = [], start, 0
     for m in re.finditer(r"\S+", text[start:end]):
         words += 1
         token_end = start + m.end()
-        if words >= MAX_SENTENCE_WORDS // 2 and m.group().endswith((";", ",")) or words >= MAX_SENTENCE_WORDS:
+        if words >= max_words // 2 and m.group().endswith((";", ",")) or words >= max_words:
             pieces.append(_trim(text, piece_start, token_end))
             piece_start, words = token_end, 0
     if piece_start < end and text[piece_start:end].strip():

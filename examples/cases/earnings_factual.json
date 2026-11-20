@@ -1,0 +1,31 @@
+{
+  "name": "Quarterly earnings summary (faithful)",
+  "domain": "earnings",
+  "question": "Can you summarise Corvane Systems' third-quarter fiscal 2026 results for me, including growth, margins, guidance and anything notable from the investor call?",
+  "description": "A faithful paraphrase of an earnings release and call summary, including details that only the second source contains.",
+  "response": "Corvane Systems brought in $412 million in revenue in the third quarter of fiscal 2026, a 14 percent increase over the same period last year. Gross margin widened to 46.2 percent from 43.8 percent a year ago, which CFO Desmond Okafor attributed mainly to cheaper components and a more favourable product mix. Operating income came in at $58 million, or about 14.1 percent of revenue. The company lifted its full-year revenue outlook to a range of $1.62 billion to $1.65 billion. On the call, management said the Halden vibration monitors now make up roughly a third of sales, and Asia-Pacific revenue rose 22 percent while Europe was flat. Corvane finished the quarter with 3,870 employees and does not expect to add staff in the fourth quarter beyond backfilling departures.",
+  "sources": [
+    {
+      "id": "q3-press-release",
+      "title": "Corvane Systems reports third-quarter fiscal 2026 results",
+      "text": "Corvane Systems, a maker of industrial sensing equipment based in Tillbury, reported revenue of $412 million for the third quarter of fiscal 2026. Revenue grew 14 percent compared with the same quarter a year earlier, driven mainly by demand for its Halden line of vibration monitors. Gross margin was 46.2 percent, up from 43.8 percent in the prior-year quarter. Operating income rose to $58 million, giving an operating margin of 14.1 percent. The company raised its full-year revenue guidance to between $1.62 billion and $1.65 billion. Chief Executive Officer Marisol Atwater said the quarter showed that customers are willing to pay for reliability. Corvane ended the quarter with 3,870 employees."
+    },
+    {
+      "id": "q3-investor-call",
+      "title": "Corvane Systems Q3 fiscal 2026 investor call summary",
+      "text": "During the investor call, Chief Financial Officer Desmond Okafor said the gross margin improvement came mostly from lower component costs and a richer product mix. Okafor noted that the company does not plan to increase headcount in the fourth quarter, apart from replacing employees who leave. Sales in the Asia-Pacific region grew 22 percent, while European sales were flat. Atwater told analysts that Halden monitors now account for roughly one third of total revenue. The company expects fourth-quarter gross margin to be slightly lower than in the third quarter because of a planned retooling at its Brenmoor plant. Okafor said Corvane repurchased $25 million of its shares during the quarter. Management declined to provide guidance for fiscal 2027."
+    }
+  ],
+  "expected": [
+    {"claim": "Corvane Systems brought in $412 million in revenue in the third quarter of fiscal 2026", "label": "SUPPORTED", "why": "Press release: revenue of $412 million for Q3 fiscal 2026."},
+    {"claim": "a 14 percent increase over the same period last year", "label": "SUPPORTED", "why": "Press release: revenue grew 14 percent year over year."},
+    {"claim": "Gross margin widened to 46.2 percent from 43.8 percent a year ago", "label": "SUPPORTED", "why": "Press release: 46.2 percent, up from 43.8 percent."},
+    {"claim": "which CFO Desmond Okafor attributed mainly to cheaper components and a more favourable product mix", "label": "SUPPORTED", "why": "Call summary: CFO Okafor credited lower component costs and a richer product mix."},
+    {"claim": "Operating income came in at $58 million, or about 14.1 percent of revenue.", "label": "SUPPORTED", "why": "Press release: operating income $58 million, operating margin 14.1 percent."},
+    {"claim": "The company lifted its full-year revenue outlook to a range of $1.62 billion to $1.65 billion.", "label": "SUPPORTED", "why": "Press release: guidance raised to $1.62-1.65 billion."},
+    {"claim": "management said the Halden vibration monitors now make up roughly a third of sales", "label": "SUPPORTED", "why": "Call summary: Halden monitors are roughly one third of total revenue."},
+    {"claim": "Asia-Pacific revenue rose 22 percent while Europe was flat", "label": "SUPPORTED", "why": "Call summary: Asia-Pacific sales grew 22 percent, European sales flat."},
+    {"claim": "Corvane finished the quarter with 3,870 employees", "label": "SUPPORTED", "why": "Press release: ended the quarter with 3,870 employees."},
+    {"claim": "does not expect to add staff in the fourth quarter beyond backfilling departures", "label": "SUPPORTED", "why": "Call summary: no headcount increase in Q4 apart from replacing leavers."}
+  ]
+}

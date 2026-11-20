@@ -1,0 +1,71 @@
+{
+  "name": "Napping study summary (with hallucinations)",
+  "domain": "research",
+  "question": "Can you summarise the Varnhollow napping study for my psychology essay? What did they find, and what are the limitations?",
+  "description": "A plausible study summary that mixes correct details with a wrong sample size, a reversed finding, a wrong journal name, an invented statistic, and an unsupported endorsement.",
+  "response": "The Varnhollow study, led by Dr. Halvora Brenquist of the university's Department of Psychology, looked at whether a short afternoon nap improves working memory in undergraduates. Each of the 112 students took part in two lab sessions a week apart, napping for 20 minutes in one and resting quietly while awake in the other. After the nap, students scored about 11 percent higher on a digit-span test, and their performance on a spatial n-back task also improved significantly. Students fell asleep in an average of 7 minutes during the nap sessions. The work was funded by the Pellmarsh Foundation for Learning Science and published in the Journal of Experimental Sleep Science. The main limitation the authors flag is that everyone was recruited from a single campus, so the results may not generalise to other students. Overall, this is one of the most convincing studies yet on napping, and students should make a short nap part of their daily routine.",
+  "sources": [
+    {
+      "id": "brenquist-napping-abstract",
+      "title": "Midday Napping and Working Memory in Undergraduate Students: A Randomized Crossover Trial (abstract)",
+      "text": "Short daytime naps are widely recommended to students, but their effect on working memory has rarely been tested under controlled conditions. In this randomized crossover trial, 84 undergraduate students aged 18 to 24 each completed two laboratory sessions held one week apart. In one session participants took a 20-minute nap at 1:30 p.m., and in the other they rested quietly while awake for the same period. Working memory was measured 30 minutes later with a digit-span task and a spatial n-back task. Scores on the digit-span task were on average 11 percent higher after the nap than after quiet rest. Performance on the spatial n-back task did not differ significantly between the two conditions. Participants who reported sleeping less than six hours the previous night showed the largest benefit. Because the study included only one session per condition and measured performance within an hour of waking, it cannot show whether the effect lasts beyond the afternoon."
+    },
+    {
+      "id": "varnhollow-news-napping",
+      "title": "Varnhollow study finds short naps sharpen students' recall",
+      "text": "A team at Varnhollow University's Department of Psychology has found that a short afternoon nap can give students a measurable boost on certain memory tasks. The study was led by Dr. Halvora Brenquist, an associate professor who has researched sleep and learning for over a decade, with doctoral student Tomas Elderwick as co-author. The research was funded by the Pellmarsh Foundation for Learning Science and published in the Journal of Applied Cognitive Rest. Brenquist said the results suggest that a brief nap is most useful for students who are already short on sleep. She cautioned that the study took place in a quiet laboratory and that napping in a noisy dormitory or library may not produce the same effect. The team also noted that all participants were recruited from a single campus, which limits how far the findings can be generalised. A follow-up study tracking students over a full semester is planned to begin next spring."
+    }
+  ],
+  "expected": [
+    {
+      "claim": "The Varnhollow study, led by Dr. Halvora Brenquist of the university's Department of Psychology, looked at whether a short afternoon nap improves working memory in undergraduates.",
+      "label": "SUPPORTED",
+      "why": "The news article names Brenquist and the department; the abstract describes a nap vs. working memory trial in undergraduates."
+    },
+    {
+      "claim": "Each of the 112 students took part in two lab sessions a week apart",
+      "label": "CONTRADICTED",
+      "why": "Wrong number: the abstract reports 84 students, not 112."
+    },
+    {
+      "claim": "napping for 20 minutes in one and resting quietly while awake in the other",
+      "label": "SUPPORTED",
+      "why": "Abstract: a 20-minute nap in one session, quiet wakeful rest in the other."
+    },
+    {
+      "claim": "After the nap, students scored about 11 percent higher on a digit-span test",
+      "label": "SUPPORTED",
+      "why": "Abstract: digit-span scores were on average 11 percent higher after the nap."
+    },
+    {
+      "claim": "their performance on a spatial n-back task also improved significantly",
+      "label": "CONTRADICTED",
+      "why": "Reversed meaning: the abstract says n-back performance did not differ significantly."
+    },
+    {
+      "claim": "Students fell asleep in an average of 7 minutes during the nap sessions.",
+      "label": "FABRICATED",
+      "why": "Invented statistic: no source reports how long participants took to fall asleep."
+    },
+    {
+      "claim": "The work was funded by the Pellmarsh Foundation for Learning Science",
+      "label": "SUPPORTED",
+      "why": "News article: funded by the Pellmarsh Foundation for Learning Science."
+    },
+    {
+      "claim": "published in the Journal of Experimental Sleep Science",
+      "label": "CONTRADICTED",
+      "why": "Wrong name: the news article says it was published in the Journal of Applied Cognitive Rest."
+    },
+    {
+      "claim": "The main limitation the authors flag is that everyone was recruited from a single campus, so the results may not generalise to other students.",
+      "label": "SUPPORTED",
+      "why": "News article: all participants came from a single campus, which limits generalisation."
+    },
+    {
+      "claim": "Overall, this is one of the most convincing studies yet on napping, and students should make a short nap part of their daily routine.",
+      "label": "UNSUPPORTED",
+      "why": "Opinion and advice that the sources neither state nor contradict."
+    }
+  ]
+}

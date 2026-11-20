@@ -1,0 +1,66 @@
+{
+  "name": "Dravotine dosing and precautions (hallucinated)",
+  "domain": "medication",
+  "question": "I've just been prescribed Dravotine for my blood pressure. How and when should I take it, and is there anything I should avoid while I'm on it?",
+  "description": "A medication answer that mixes correct leaflet facts with a wrong titration interval, a reversed interaction warning, an invented statistic, a swapped pharmacy name and an unsupported reassurance.",
+  "response": "Dravotine is usually started at one 40 mg tablet once a day, and your doctor may raise this to 80 mg after two weeks if your blood pressure is still high. Take the tablet in the morning, swallowed whole with a glass of water, whether or not you've eaten. Potassium supplements and potassium-based salt substitutes are fine to use alongside Dravotine, although ibuprofen can make the medicine less effective. The most common side effects are dizziness, headache and a dry cough, and in clinical studies about 3 in 100 patients stopped treatment because of the cough. Most people find Dravotine very easy to tolerate, so these side effects are rarely anything to worry about. Any unused tablets can be returned to a Harrowfield branch for safe disposal.",
+  "sources": [
+    {
+      "id": "dravotine-patient-leaflet",
+      "title": "Dravotine 40 mg tablets: information for the patient",
+      "text": "Dravotine 40 mg tablets are prescribed to lower high blood pressure in adults. The usual starting dose is one 40 mg tablet taken once a day. Your doctor may increase the dose to 80 mg once a day after four weeks if your blood pressure remains high. Take the tablet in the morning, with or without food, and swallow it whole with a glass of water. The most common side effects are dizziness, headache and a dry cough, which affect up to 1 in 10 people. Contact your doctor straight away if you notice swelling of the face, lips or tongue. Do not take Dravotine if you are pregnant or breastfeeding. Dravotine is manufactured by Harrowfield Pharmaceuticals in Kestrel Bay."
+    },
+    {
+      "id": "brightwell-pharmacy-faq",
+      "title": "Brightwell Community Pharmacy: Dravotine frequently asked questions",
+      "text": "If you miss a dose of Dravotine, take it as soon as you remember on the same day, but never take two tablets to make up for a forgotten one. Dravotine should not be combined with potassium supplements or salt substitutes that contain potassium, because this can raise the level of potassium in the blood. Ibuprofen and other anti-inflammatory painkillers can reduce the effect of Dravotine, so paracetamol is usually the preferred painkiller. Drinking alcohol may make the dizziness caused by Dravotine worse. Store the tablets below 25°C in the original blister pack to protect them from moisture. Keep the medicine out of the sight and reach of children. Unused tablets can be returned to any Brightwell branch for safe disposal."
+    }
+  ],
+  "expected": [
+    {
+      "claim": "Dravotine is usually started at one 40 mg tablet once a day",
+      "label": "SUPPORTED",
+      "why": "Leaflet: the usual starting dose is one 40 mg tablet once a day."
+    },
+    {
+      "claim": "your doctor may raise this to 80 mg after two weeks if your blood pressure is still high",
+      "label": "CONTRADICTED",
+      "why": "Wrong number: the leaflet says the dose may be increased after four weeks, not two."
+    },
+    {
+      "claim": "Take the tablet in the morning, swallowed whole with a glass of water, whether or not you've eaten.",
+      "label": "SUPPORTED",
+      "why": "Leaflet: take in the morning, with or without food, swallowed whole with water."
+    },
+    {
+      "claim": "Potassium supplements and potassium-based salt substitutes are fine to use alongside Dravotine",
+      "label": "CONTRADICTED",
+      "why": "Reversed meaning: the pharmacy FAQ says Dravotine should not be combined with them."
+    },
+    {
+      "claim": "ibuprofen can make the medicine less effective",
+      "label": "SUPPORTED",
+      "why": "Pharmacy FAQ: ibuprofen can reduce the effect of Dravotine."
+    },
+    {
+      "claim": "The most common side effects are dizziness, headache and a dry cough",
+      "label": "SUPPORTED",
+      "why": "Leaflet lists these as the most common side effects."
+    },
+    {
+      "claim": "in clinical studies about 3 in 100 patients stopped treatment because of the cough",
+      "label": "FABRICATED",
+      "why": "Invented statistic: no source mentions clinical studies, discontinuation, or 3 in 100."
+    },
+    {
+      "claim": "Most people find Dravotine very easy to tolerate, so these side effects are rarely anything to worry about.",
+      "label": "UNSUPPORTED",
+      "why": "Opinion/reassurance the sources neither state nor directly contradict."
+    },
+    {
+      "claim": "Any unused tablets can be returned to a Harrowfield branch for safe disposal.",
+      "label": "CONTRADICTED",
+      "why": "Wrong name: unused tablets go to a Brightwell branch; Harrowfield is the manufacturer."
+    }
+  ]
+}

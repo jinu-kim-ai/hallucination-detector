@@ -40,9 +40,11 @@ def decide(similarity: float, conflicts: list[str], novel: list[str], nli: dict[
     s, r = cfg.support_threshold, cfg.related_threshold
     reasons = [f"best evidence similarity {similarity:.2f}"]
 
-    if nli and similarity >= cfg.contradiction_threshold and nli["contradiction"] >= cfg.nli_threshold:
+    # Rule 1 needs close evidence for fact conflicts too: weakly related text is about another fact.
+    close = similarity >= cfg.contradiction_threshold
+    if nli and close and nli["contradiction"] >= cfg.nli_threshold:
         conflicts = conflicts + [f"NLI contradiction p={nli['contradiction']:.2f}"]
-    if conflicts:
+    if conflicts and close:
         conf = min(1.0, 0.55 + 0.15 * len(conflicts) + 0.3 * (similarity - r) / (1 - r))
         return CONTRADICTED, conf, reasons + conflicts
     if novel:

@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from hallucination_detector.retrieval import HashingEmbedder, Retriever, get_embedder
 from hallucination_detector.schemas import Sentence
@@ -67,6 +68,36 @@ def test_empty_index_returns_no_hits():
     retriever = Retriever(HashingEmbedder())
     index = retriever.index([("", [])])
     assert retriever.search(index, "anything", k=3) == []
+
+
+def test_embedding_cache_is_bounded_lru():
+    embedder = CountingEmbedder()
+    retriever = Retriever(embedder, cache_size=2)
+    docs = [sentences(name, [f"Sentence about {name}."]) for name in ("a", "b", "c")]
+    retriever.index([("a", docs[0])])
+    retriever.index([("b", docs[1])])
+    retriever.index([("a", docs[0])])            # touch a, so b is now the oldest
+    retriever.index([("c", docs[2])])            # evicts b
+    assert len(retriever._cache) == 2 and embedder.calls == 3
+    retriever.index([("a", docs[0])])
+    assert embedder.calls == 3                   # a survived
+    retriever.index([("b", docs[1])])
+    assert embedder.calls == 4                   # b was evicted
+
+
+def test_cache_key_keeps_sentence_boundaries():
+    retriever = Retriever(HashingEmbedder())
+    retriever.index([("d1", sentences("d1", ["apple\0banana", "cherry"]))])
+    index = retriever.index([("d2", sentences("d2", ["apple", "banana\0cherry"]))])
+    assert len(retriever._cache) == 2
+    assert np.allclose(index.matrix[0], HashingEmbedder().encode(["apple"])[0])
+
+
+@pytest.mark.parametrize("k", [0, -1])
+def test_search_rejects_k_below_one(k):
+    retriever = Retriever(HashingEmbedder())
+    with pytest.raises(ValueError, match="at least 1"):
+        retriever.search(build(retriever), "alpha", k=k)
 
 
 def test_embeddings_are_unit_length():

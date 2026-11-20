@@ -11,15 +11,17 @@
     "nli_threshold": 0.7,
     "nli_top_k": 3,
     "nli_context_sentences": 0,
-    "min_claim_words": 3
+    "min_claim_words": 3,
+    "min_source_words": 3,
+    "max_sentence_words": 120
   },
   "metrics": {
     "binary_hallucination_detection": {
       "n": 40,
-      "precision": 0.864,
+      "precision": 0.905,
       "recall": 0.905,
-      "f1": 0.884,
-      "accuracy": 0.875
+      "f1": 0.905,
+      "accuracy": 0.9
     },
     "by_domain": {
       "biology": {
@@ -45,10 +47,10 @@
       },
       "multi-doc": {
         "n": 8,
-        "precision": 0.75,
+        "precision": 1.0,
         "recall": 0.75,
-        "f1": 0.75,
-        "accuracy": 0.75
+        "f1": 0.857,
+        "accuracy": 0.875
       },
       "sports": {
         "n": 8,
@@ -58,15 +60,15 @@
         "accuracy": 0.875
       }
     },
-    "four_way_accuracy": 0.8,
+    "four_way_accuracy": 0.825,
     "per_label": {
       "SUPPORTED": {
-        "precision": 0.889,
-        "recall": 0.842,
+        "precision": 0.895,
+        "recall": 0.895,
         "support": 19
       },
       "CONTRADICTED": {
-        "precision": 0.818,
+        "precision": 0.9,
         "recall": 0.75,
         "support": 12
       },
@@ -83,8 +85,8 @@
     },
     "confusion": {
       "SUPPORTED": {
-        "SUPPORTED": 16,
-        "CONTRADICTED": 2,
+        "SUPPORTED": 17,
+        "CONTRADICTED": 1,
         "FABRICATED": 1,
         "UNSUPPORTED": 0
       },
@@ -310,7 +312,7 @@
       "similarity": 0.4979325234889984,
       "reasons": [
         "best evidence similarity 0.50",
-        "not found in source: 1779, 'Jan Ingenhousz', '1779'"
+        "not found in source: 1, 1779, 'Jan Ingenhousz', '1779'"
       ]
     },
     {
@@ -417,11 +419,10 @@
       "claim": "Eliud Kipchoge's run in Vienna counted as an official world record.",
       "label": "CONTRADICTED",
       "pred": "CONTRADICTED",
-      "confidence": 1.0,
+      "confidence": 0.863,
       "similarity": 0.7488709092140198,
       "reasons": [
         "best evidence similarity 0.75",
-        "polarity mismatch: negation differs from evidence",
         "NLI contradiction p=1.00"
       ]
     },
@@ -502,7 +503,7 @@
       "similarity": 0.7538455724716187,
       "reasons": [
         "best evidence similarity 0.75",
-        "number mismatch: claim says 6, evidence says 4, 240, 1e+06",
+        "number mismatch: claim says 6, evidence says 4",
         "DATE mismatch: claim says 'six years', evidence says 'four years'",
         "NLI contradiction p=0.98"
       ]
@@ -559,12 +560,11 @@
       ],
       "claim": "The Vega 3 battery stores 85 kilowatt-hours.",
       "label": "SUPPORTED",
-      "pred": "CONTRADICTED",
-      "confidence": 0.842,
+      "pred": "SUPPORTED",
+      "confidence": 0.737,
       "similarity": 0.710829496383667,
       "reasons": [
-        "best evidence similarity 0.71",
-        "number mismatch: claim says 3, evidence says 18, 80, 85"
+        "best evidence similarity 0.71"
       ]
     },
     {
@@ -629,7 +629,7 @@
       "similarity": 0.9043990969657898,
       "reasons": [
         "best evidence similarity 0.90",
-        "number mismatch: claim says 12000, evidence says 3, 9400",
+        "number mismatch: claim says 12000, evidence says 9400",
         "NLI contradiction p=1.00"
       ]
     },

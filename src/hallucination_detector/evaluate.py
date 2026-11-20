@@ -62,8 +62,8 @@ class BinaryMetrics:
 
 def load_dataset(data_dir: str | Path) -> tuple[dict[str, str], list[dict]]:
     data_dir = Path(data_dir)
-    sources = json.loads((data_dir / "sources.json").read_text(encoding="utf-8"))
-    lines = (data_dir / "labeled_claims.jsonl").read_text(encoding="utf-8").splitlines()
+    sources = json.loads((data_dir / "sources.json").read_text(encoding="utf-8-sig"))
+    lines = (data_dir / "labeled_claims.jsonl").read_text(encoding="utf-8-sig").splitlines()
     return sources, [json.loads(line) for line in lines if line.strip()]
 
 
@@ -73,7 +73,7 @@ def predict_all(detector: HallucinationDetector, sources: dict[str, str], rows: 
         ids = row.get("source_ids") or [row["source_id"]]
         verdict = detector.check_claim(row["claim"], [SourceDocument(i, sources[i]) for i in ids])
         preds.append({**row, "pred": verdict.label, "confidence": verdict.confidence,
-                      "similarity": verdict.citations[0].similarity if verdict.citations else 0.0,
+                      "similarity": verdict.best_similarity,
                       "reasons": verdict.reasons})
     return preds
 

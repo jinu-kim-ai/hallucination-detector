@@ -22,6 +22,13 @@ def test_rule_1_fact_conflict_means_contradicted():
     assert label == CONTRADICTED and "number mismatch" in reasons[1]
 
 
+def test_rule_1_fact_conflict_needs_close_evidence():
+    # the rules table holds for any caller, not only for the pipeline that pre-filters conflicts
+    assert decide(0.30, ["number mismatch"], ["45"], None, CFG)[0] == FABRICATED
+    assert decide(0.50, ["number mismatch: claim says 45, evidence says 21.5"], [], None, CFG)[0] == UNSUPPORTED
+    assert decide(0.70, ["number mismatch"], [], None, CFG)[0] == CONTRADICTED
+
+
 def test_rule_1_nli_contradiction_needs_close_evidence():
     assert decide(0.80, [], [], CONTRADICTS, CFG)[0] == CONTRADICTED
     assert decide(0.60, [], [], CONTRADICTS, CFG)[0] == UNSUPPORTED      # too far to be the same fact

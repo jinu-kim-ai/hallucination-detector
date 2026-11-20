@@ -1,0 +1,56 @@
+{
+  "name": "Blender return and warranty (hallucinated)",
+  "domain": "policy",
+  "question": "I bought a blender from Tallowmere three weeks ago and have used it a few times, but now the motor makes a grinding noise. Can I return it, and if not, what are my options?",
+  "description": "A support-bot answer that mixes correct policy details with a reversed return rule, a wrong warehouse, a wrong warranty length, an invented review time and an unsupported recommendation.",
+  "response": "Good news: your blender is still within Tallowmere's 30-day return window, counted from the delivery date. Opened small appliances can be returned for any reason during that window, as long as you include the original packaging. Once the blender reaches the Ashgrove distribution centre, your refund will be issued to your original payment method within 7 business days. The blender is also covered by a three-year limited warranty against defects in materials and workmanship. Our Product Care team usually reviews warranty claims within 48 hours. Approved claims are repaired or replaced at no cost, with shipping paid in both directions. Honestly, the warranty route is usually the quicker and more hassle-free option for a motor problem like this.",
+  "sources": [
+    {
+      "id": "tallowmere-return-policy",
+      "title": "Tallowmere Home & Kitchen - Returns and Refunds",
+      "text": "Tallowmere Home & Kitchen accepts returns of most items within 30 days of the delivery date. Items must be unused, in their original packaging, and accompanied by the order number. Customers start a return from the Orders page of their online account, which generates a prepaid shipping label. A flat return shipping fee of $6.95 is deducted from the refund unless the item arrived damaged or the wrong item was sent. Refunds are issued to the original payment method within 7 business days after the returned item reaches the Fernhill distribution centre. Opened small appliances can be returned only if they are defective. Clearance items marked Final Sale cannot be returned or exchanged. Orders placed between November 15 and December 24 may be returned until January 31 of the following year."
+    },
+    {
+      "id": "tallowmere-warranty-terms",
+      "title": "Tallowmere Home & Kitchen - Small Appliance Warranty Terms",
+      "text": "Every small appliance sold by Tallowmere Home & Kitchen carries a two-year limited warranty from the date of purchase. The warranty covers defects in materials and workmanship under normal household use. The warranty does not cover damage caused by accidents, misuse, commercial use, or normal wear on parts such as blades and gaskets. To make a claim, customers must submit the order number and a photo or short video of the fault through the Warranty Claims form. Approved claims are resolved by repair or replacement at no charge, and Tallowmere covers the shipping costs in both directions. If an identical replacement is no longer available, the customer receives store credit equal to the original purchase price. Cookware sold under the Tallowmere Hearth label carries a separate lifetime warranty against warping."
+    }
+  ],
+  "expected": [
+    {
+      "claim": "your blender is still within Tallowmere's 30-day return window, counted from the delivery date",
+      "label": "SUPPORTED",
+      "why": "Return policy: returns accepted within 30 days of the delivery date."
+    },
+    {
+      "claim": "Opened small appliances can be returned for any reason during that window, as long as you include the original packaging.",
+      "label": "CONTRADICTED",
+      "why": "Reversed meaning: the policy says opened small appliances can be returned only if they are defective."
+    },
+    {
+      "claim": "Once the blender reaches the Ashgrove distribution centre, your refund will be issued to your original payment method within 7 business days.",
+      "label": "CONTRADICTED",
+      "why": "Wrong place: returns go to the Fernhill distribution centre, not Ashgrove (the 7-business-day timing is correct)."
+    },
+    {
+      "claim": "The blender is also covered by a three-year limited warranty against defects in materials and workmanship.",
+      "label": "CONTRADICTED",
+      "why": "Wrong number: the warranty terms give a two-year limited warranty."
+    },
+    {
+      "claim": "Our Product Care team usually reviews warranty claims within 48 hours.",
+      "label": "FABRICATED",
+      "why": "Neither a 'Product Care team' nor a 48-hour review time appears in any source."
+    },
+    {
+      "claim": "Approved claims are repaired or replaced at no cost, with shipping paid in both directions.",
+      "label": "SUPPORTED",
+      "why": "Warranty terms: approved claims are repaired or replaced at no charge and Tallowmere covers shipping both ways."
+    },
+    {
+      "claim": "Honestly, the warranty route is usually the quicker and more hassle-free option for a motor problem like this.",
+      "label": "UNSUPPORTED",
+      "why": "Opinion comparing the two routes; the sources say nothing about which is faster or easier."
+    }
+  ]
+}
