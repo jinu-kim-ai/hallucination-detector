@@ -42,12 +42,14 @@ _INTRANSITIVE = frozenset({
     "graduate", "decline", "grow", "remain", "return", "succeed", "fail", "live", "work", "serve", "marry",
     "move", "stay", "rise", "fall", "recover", "settle", "travel", "appear", "disappear", "occur", "happen",
     "exist", "collapse", "evolve", "flourish", "prosper", "perish", "vanish", "erupt", "retreat",
-    "compete", "participate", "testify", "debut"})
-# Heads that say little alone, so ", which ..." after "<head> of Y" describes the whole phrase, not Y.
+    "compete", "participate", "testify", "debut", "relapse"})
+# Heads that say little alone, so ", which ..." after "<head> of Y" describes the whole phrase, not Y: "the rate of
+# inflation, which peaked ...". It is sometimes Y ("the cost of the project, which was led by Siemens"), but keeping
+# such a clause in its sentence would merge two facts with separate numbers into one claim.
 _EMPTY_HEADS = frozenset({
     "one", "some", "most", "part", "all", "many", "few", "each", "none", "half", "rest", "majority", "minority",
-    "price", "cost", "number", "share", "rate", "level", "value", "amount", "percentage", "proportion", "total",
-    "city", "town", "state", "university", "republic", "kingdom", "province", "county", "island"})
+    "price", "cost", "number", "share", "rate", "level", "value", "amount", "percentage", "proportion", "total"})
+_NUMERIC_ENTS = ("DATE", "TIME", "PERCENT", "MONEY", "QUANTITY", "ORDINAL", "CARDINAL")
 
 
 def load_nlp(model: str = "en_core_web_sm"):
@@ -66,7 +68,7 @@ class _Piece(NamedTuple):
     subject: object         # subject token (or None), used to resolve a pronoun
     own_subject: bool       # the clause has its own subject, so a short piece is still a full claim
     words: dict             # token id -> text to show instead ("which" -> "this")
-    context: tuple = ()     # tokens to check instead, when the piece cannot be checked alone ("This beat ...")
+    context: tuple = ()     # tokens to check instead, when the piece cannot be checked alone ("... credited this")
 
 
 class ClaimExtractor:
@@ -99,7 +101,9 @@ class ClaimExtractor:
                     referent = referents.resolve(piece.subject)
                     if referent and any(t.i == piece.subject.i for t in tokens):
                         claim.resolved_text = _finish(_join(tokens, {**piece.words, piece.subject.i: referent}))
-                    if piece.context:       # also keeps two "This beat expectations." from different facts apart
+                    elif referents.ambiguous(piece.subject):
+                        claim.ambiguous_pronoun = piece.subject.lower_
+                    if piece.context:       # also keeps two "X credited this to Asia." from different facts apart
                         claim.resolved_text = _finish(_join(piece.context[_opener_length(piece.context):]))
                     key = _dedupe_key(claim.resolved_text)
                     claim.duplicate_of = seen.get(key)
@@ -183,7 +187,11 @@ def _decompose(sent) -> list[_Piece]:
             continue
         subject = _inherited_subject(verb)
         copied = _trim([t for t in _subtree(subject) if t.i not in excluded and _keep(t)]) if subject is not None else []
-        pieces.append(_piece(copied + _shared_aux(verb) + own, own, subject, False))
+        aux = _shared_aux(verb)
+        # The conjunct's own "never" goes after the first auxiliary: "has been dug and never explored" -> "has never
+        # been explored".
+        neg = own[:1] if aux and own[0].dep_ == "neg" else []
+        pieces.append(_piece(copied + aux[:1] + neg + aux[1:] + own[len(neg):], own, subject, False))
     return pieces + contrast + relative
 
 
@@ -310,11 +318,20 @@ def _clause_ids(head, verb) -> set[int]:
 
 def _shared_aux(verb) -> list:
     """Auxiliaries and negation a conjunct shares with the verb before it: "claims are repaired or [are]
-    replaced", "did not raise prices or [did not] cut jobs"."""
-    if not _shares_head(verb):
+    replaced", "did not raise prices or [did not] cut jobs". A conjunct with its own "never" / "not" still
+    shares the auxiliary, but not the head's negation or a "do": "was passed but [was] never signed"."""
+    if verb.dep_ != "conj" or _has_own_subject(verb) or any(c.dep_ in _AUX for c in verb.children):
         return []
     head = verb.head
     shared = _prefix(head) or _shared_aux(head)
+    if any(c.dep_ == "neg" for c in verb.children):     # "did not A and never B" -> "never B", not "did never B"
+        if any(t.dep_ == "neg" and t.i > 0 and not t.doc[t.i - 1].whitespace_ for t in shared):
+            return []                                   # "can't A and never B": "ca" cannot go without its "n't"
+        # spaCy tags any past form after "never" as a participle, so "was launched and never succeeded" looks like
+        # "was passed but never signed". A verb with an object or one that takes none is not passive here.
+        if verb.tag_ == "VBN" and (verb.lemma_.lower() in _INTRANSITIVE or any(c.dep_ == "dobj" for c in verb.children)):
+            return []
+        shared = [t for t in shared if t.dep_ != "neg" and t.lemma_.lower() != "do"]
     # An auxiliary only fits a verb of the same form; "never" alone fits any finite verb.
     if any(t.dep_ in _AUX for t in shared) and _verb_form(verb) != _verb_form(head):
         return []
@@ -363,19 +380,27 @@ def _relative_clause(sent, pronoun) -> tuple[_Piece, set[int]] | None:
     body = [t for t in clause if t.i != pronoun.i]
     if not body:
         return None
-    antecedent = _antecedent(doc[pronoun.i - 2], clause_ids, pronoun, verb if is_subject else None)
-    if antecedent:
-        stand_in, context = antecedent, []
-        first = antecedent[0]               # "The telescope, which NASA launched" -> "NASA launched the telescope"
+    anchor = doc[pronoun.i - 2]
+    noun = _noun_before(anchor)
+    if noun is not None:
+        stand_in, context = _antecedent(noun, anchor, clause_ids, pronoun, verb if is_subject else None), []
+        first = stand_in[0]                 # "The telescope, which NASA launched" -> "NASA launched the telescope"
         words = {first.i: first.lower_} if first.i == sent.start and first.pos_ == "DET" else {}
     else:
-        # With no noun phrase right before the comma, "which" stands for the whole clause. "This beat expectations"
-        # says nothing checkable alone, so it is checked together with the clause it describes.
+        # "which" stands for the whole clause before it, so "This was up from 9% in 2022." cannot be checked alone,
+        # and checking it with that clause would judge the clause twice: it stays in its sentence, as one claim.
+        # Only an attribution to someone named is split off ("CFO Marisol Atwater credited this to lower costs"),
+        # still checked together with the clause it describes; the clause before it is then its own claim.
+        who = _subject(verb)
+        if is_subject or who is None or who.ent_type_ in ("",) + _NUMERIC_ENTS:
+            return None
         stand_in, words = [pronoun], {pronoun.i: "this"}
         context = [t for t in sent if t.i <= max(clause_ids) and _keep(t)]
     if is_subject:
         tokens = stand_in + body
     else:                                   # the object goes where it was taken from: "signed off on the merger"
+        if any(c.dep_ == "dobj" and c.i != pronoun.i for c in gov.children):
+            gov = verb                      # misparse: "credited [which] to lower costs" gave "lower" two objects
         at = sum(1 for t in body if t.i <= _object_slot(gov))
         tokens = body[:at] + stand_in + body[at:]
     right = verb.right_edge
@@ -392,14 +417,22 @@ def _object_slot(gov) -> int:
     return max([gov.i] + prt + stranded)
 
 
-def _antecedent(anchor, clause_ids: set[int], pronoun, verb=None) -> list | None:
-    """The noun phrase right before ", which ...". That is what the clause describes, even when spaCy
-    attaches the clause higher up ("a better choice than ibuprofen, which ..." describes ibuprofen)."""
+def _noun_before(anchor):
+    """The noun right before ", which ...", or None when "which" stands for the whole clause: "in 2005, which ...",
+    "a year ago, which ...", "improved to 46.2 percent, which ..."."""
     head = anchor
     while head.dep_ in ("compound", "nummod", "flat") and head.head.pos_ in ("NOUN", "PROPN"):
         head = head.head                                    # "Python 3.0" -> Python
-    if head.pos_ not in ("NOUN", "PROPN", "PRON"):         # "in 2005, which ...", "a year ago, which ..."
+    if head.pos_ not in ("NOUN", "PROPN", "PRON"):
         return None
+    if head.pos_ == "NOUN" and head.ent_type_ in _NUMERIC_ENTS:
+        return None             # "46.2 percent", "two years"; a name is kept even if mislabelled ("Flight 370": DATE)
+    return head
+
+
+def _antecedent(head, anchor, clause_ids: set[int], pronoun, verb=None) -> list:
+    """The noun phrase ending at anchor that ", which ..." describes, even when spaCy attaches the clause higher up
+    ("a better choice than ibuprofen, which ..." describes ibuprofen)."""
     while _describes_outer_noun(head, pronoun, verb):
         head = head.head.head                               # "the CEO of Acme, who ..." -> CEO
     return [t for t in _subtree(head) if t.i <= anchor.i and t.i not in clause_ids
@@ -409,10 +442,12 @@ def _antecedent(anchor, clause_ids: set[int], pronoun, verb=None) -> list | None
 def _describes_outer_noun(noun, pronoun, verb) -> bool:
     """Whether ", which / who ..." after "X of Y" (noun is Y) describes X. By default it describes Y:
     "the capital of France, which has 68 million people" is about France."""
-    if noun.dep_ != "pobj" or noun.head.lower_ != "of" or noun.head.head.pos_ not in ("NOUN", "PROPN", "PRON"):
+    if noun.dep_ != "pobj" or noun.head.lower_ != "of" or noun.head.head.pos_ not in ("NOUN", "PROPN", "PRON", "NUM"):
         return False
     outer = noun.head.head
     number = _verb_number(verb)
+    if outer.pos_ == "NUM":     # "two of the founders, who met ..." are the founders; "one of them, who was ..." is one
+        return number is not None and _noun_number(noun) not in (None, number)
     if number and _noun_number(outer) not in (None, number) and _noun_number(noun) == number:
         return False                                        # "the works of Picasso, who was born ..." is singular
     if outer.lemma_.lower() in _EMPTY_HEADS or _same_entity(noun, outer):
@@ -484,6 +519,16 @@ class _Referents:
             return None
         return getattr(self, kind)
 
+    def ambiguous(self, subj) -> bool:
+        """A he / she / they subject that was left unresolved although a candidate referent exists.
+
+        That is different from a pronoun with nothing before it to refer to (a claim checked on its own).
+        """
+        if subj is None or subj.pos_ != "PRON" or subj.lower_ not in ("he", "she", "they"):
+            return False
+        kind = _PRONOUN_KIND[subj.lower_]
+        return getattr(self, kind) is not None and self.resolve(subj) is None
+
     def _ambiguous(self, kind: str, subj) -> bool:
         # "The FDA approved Zestril, and it became ...": "it" may be Zestril, so guessing the FDA could invent
         # a contradiction. A rival later in the pronoun's own clause ("She married Pierre") does not count.
@@ -510,7 +555,6 @@ class _Referents:
 
 
 _PRONOUN_KIND = {"he": "person", "she": "person", "it": "thing", "they": "plural"}
-_NUMERIC_ENTS = ("DATE", "TIME", "PERCENT", "MONEY", "QUANTITY", "ORDINAL", "CARDINAL")
 
 
 def _rival_kinds(token) -> set[str]:

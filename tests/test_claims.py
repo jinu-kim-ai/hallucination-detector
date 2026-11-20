@@ -1,6 +1,6 @@
 import pytest
 
-from hallucination_detector import CONTRADICTED, SUPPORTED, ClaimExtractor
+from hallucination_detector import CONTRADICTED, SUPPORTED, UNSUPPORTED, ClaimExtractor
 
 
 @pytest.fixture(scope="module")
@@ -184,6 +184,46 @@ def test_negation_shared_through_or_goes_with_every_piece(extract, response, exp
     assert texts(extract(response)) == expected
 
 
+@pytest.mark.parametrize("response, expected", [
+    ("The bill was passed by the House but never signed by the president.",
+     ["The bill was passed by the House.", "The bill was never signed by the president."]),
+    ("The patient was admitted on Monday and never discharged.",
+     ["The patient was admitted on Monday.", "The patient was never discharged."]),
+    ("The bridge was built in 1990 and never repaired.", ["The bridge was built in 1990.", "The bridge was never repaired."]),
+    ("The drug was tested in 2019 and never approved in Europe.",
+     ["The drug was tested in 2019.", "The drug was never approved in Europe."]),
+    ("The patient was admitted on Monday and not discharged until Friday.",
+     ["The patient was admitted on Monday.", "The patient was not discharged until Friday."]),
+    ("She will attend the meeting and never speak.", ["She will attend the meeting.", "She will never speak."]),
+    # The head's own negation and a "do" stay behind: no "was not never", no "did never".
+    ("The vaccine was not licensed and never sold in Europe.",
+     ["The vaccine was not licensed.", "The vaccine was never sold in Europe."]),
+    ("The company did not raise prices and never cut jobs.", ["The company did not raise prices.", "The company never cut jobs."]),
+    ("Albert Einstein was born in Ulm and never returned to Germany.",       # still no "was never returned"
+     ["Albert Einstein was born in Ulm.", "Albert Einstein never returned to Germany."]),
+    # The conjunct's own "never" goes after the first auxiliary.
+    ("The site has been excavated since 1990 and never fully explored.",
+     ["The site has been excavated since 1990.", "The site has never been fully explored."]),
+])
+def test_conjunct_with_its_own_negation_shares_the_auxiliary(extract, response, expected):
+    assert texts(extract(response)) == expected
+
+
+@pytest.mark.parametrize("response, expected", [
+    # spaCy tags the verb after "never" as a participle; a verb with an object, or one that takes none, is not passive.
+    ("The vaccine was given to 5,000 people and never caused serious side effects.",
+     ["The vaccine was given to 5,000 people.", "The vaccine never caused serious side effects."]),
+    ("The program was launched in 2008 and never succeeded.",
+     ["The program was launched in 2008.", "The program never succeeded."]),
+    ("The company is based in Ohio and never moved.", ["The company is based in Ohio.", "The company never moved."]),
+    ("Revenue was not affected and never declined.", ["Revenue was not affected.", "Revenue never declined."]),
+    ("The patient was diagnosed in 2019 and never relapsed.",
+     ["The patient was diagnosed in 2019.", "The patient never relapsed."]),
+])
+def test_active_conjunct_after_never_does_not_take_a_passive_auxiliary(extract, response, expected):
+    assert texts(extract(response)) == expected
+
+
 @pytest.mark.parametrize("response", [
     "The company did not raise prices and cut jobs in 2023.",       # may mean the jobs were cut
     "People with type 1 diabetes do not produce enough insulin and require insulin therapy.",   # does mean it
@@ -236,10 +276,6 @@ def test_relative_clause_keeps_the_whole_noun_phrase(extract):
 
 
 def test_object_relative_clause_is_split(extract):
-    claims = extract("Gross margin widened to 46.2 percent from 43.8 percent a year ago, "
-                     "which CFO Desmond Okafor attributed mainly to cheaper components.")
-    assert texts(claims) == ["Gross margin widened to 46.2 percent from 43.8 percent a year ago.",
-                             "CFO Desmond Okafor attributed this mainly to cheaper components."]
     assert texts(extract("He wrote a novel, which critics praised in 1990.")) == [
         "He wrote a novel.", "Critics praised a novel in 1990."]
 
@@ -269,20 +305,136 @@ def test_object_relative_goes_back_where_it_was_taken_from(extract, response, ex
     ("The University of Oxford, which was founded in 1096, is in England.",
      "The University of Oxford was founded in 1096."),
     ("He admired the works of Picasso, who was born in Malaga.", "Picasso was born in Malaga."),
+    # A place noun is not an empty head: the clause describes the country, not "a state of Germany".
+    ("Bavaria is a state of Germany, which has about 83 million people.", "Germany has about 83 million people."),
+    ("Lyon is a city of France, which has a population of 68 million.", "France has a population of 68 million."),
+    # The verb's number rules out the inner noun: "was" is not "the founders".
+    ("One of the founders, who was born in Ulm, left in 1990.", "One of the founders was born in Ulm."),
+    ("One of the founders, who were all engineers, was born in Ulm.", "The founders were all engineers."),
+    # A quantity head: the clause describes the whole phrase.
     ("The price of oil, which rose 5 percent, hit a record.", "The price of oil rose 5 percent."),
+    ("The number of users, which grew to 2 billion in 2023, keeps rising.",
+     "The number of users grew to 2 billion in 2023."),
+    ("The share of renewables, which reached 30 percent in 2023, keeps rising.",
+     "The share of renewables reached 30 percent in 2023."),
+    # A name that spaCy labels DATE is still the noun the clause describes.
+    ("Malaysia Airlines Flight 370, which disappeared in 2014, was never found.",
+     "Malaysia Airlines Flight 370 disappeared in 2014."),
 ])
 def test_relative_clause_after_of_describes_the_right_noun(extract, response, described):
     assert texts(extract(response))[-1] == described
 
 
-def test_clause_level_which_is_checked_with_the_clause_it_describes(extract):
-    response = "Revenue rose 10% in 2023, which beat expectations. Operating costs rose 30% in 2023, which beat expectations."
+@pytest.mark.parametrize("response, expected", [
+    # Kept whole, one claim would carry two facts that the source states with separate numbers.
+    ("The rate of inflation, which peaked at 9.1 percent in June 2022, fell to 3 percent by mid-2023.",
+     ["The rate of inflation fell to 3 percent by mid-2023.", "The rate of inflation peaked at 9.1 percent in June 2022."]),
+    ("Part of the old town, which was destroyed in 1944, was rebuilt in the 1950s.",
+     ["Part of the old town was rebuilt in the 1950s.", "Part of the old town was destroyed in 1944."]),
+])
+def test_relative_clause_after_a_quantity_head_is_split(extract, response, expected):
+    assert texts(extract(response)) == expected
+
+
+@pytest.mark.parametrize("response, source", [
+    ("The rate of inflation, which peaked at 9.1 percent in June 2022, fell to 3 percent by mid-2023.",
+     "US inflation peaked at 9.1 percent in June 2022. By June 2023 the inflation rate had fallen to 3 percent."),
+    ("Part of the old town, which was destroyed in 1944, was rebuilt in the 1950s.",
+     "The old town was largely destroyed in 1944. Reconstruction of the old town took place in the 1950s."),
+    ("Malaysia Airlines Flight 370, which disappeared in 2014, was never found.",
+     "Malaysia Airlines Flight 370 disappeared on 8 March 2014 while flying from Kuala Lumpur to Beijing. The main "
+     "wreckage was never found. Air France Flight 447 crashed in 2009; its wreckage was located in 2011."),
+])
+def test_true_relative_clause_facts_are_supported(detector, response, source):
+    assert [v.label for v in detector.detect(response, source).verdicts] == [SUPPORTED, SUPPORTED]
+
+
+def test_false_year_in_a_relative_clause_after_a_mislabelled_name_is_contradicted(detector):
+    report = detector.detect(
+        "Malaysia Airlines Flight 370, which disappeared in 2015, was never found.",
+        "Malaysia Airlines Flight 370 disappeared on 8 March 2014 while flying from Kuala Lumpur to Beijing. The main "
+        "wreckage was never found. Air France Flight 447 crashed in 2009; its wreckage was located in 2011.")
+    assert [v.claim.text for v in report.verdicts][-1] == "Malaysia Airlines Flight 370 disappeared in 2015."
+    assert [v.label for v in report.verdicts] == [SUPPORTED, CONTRADICTED]
+
+
+@pytest.mark.parametrize("response", [
+    "The company cut 800 jobs in 2023, which analysts attributed to falling sales.",
+    "Revenue rose 15% in 2023, which beat expectations.",
+    "She won the race in 2019, which surprised fans.",
+    # Even when the clause has its own number or name, "This was up from 9% in 2022." could only be checked
+    # without knowing what "this" is.
+    "Revenue rose 15% in 2023, which was up from 9% in 2022.",
+    "Tesla delivered 1.8 million cars in 2023, which was up 50 percent from 2022.",
+    "The population of Houston grew to 2.3 million in 2020, which made it the third-largest city in the United States.",
+    "Boeing built the 747, which first flew in 1972.",
+])
+def test_clause_level_which_stays_with_its_clause(extract, response):
+    assert texts(extract(response)) == [response]
+
+
+@pytest.mark.parametrize("response, expected", [
+    # "46.2 percent" is not what the CFO credited, and "this" goes right after "credited", not after "lower".
+    ("Gross margin improved to 46.2 percent, which CFO Marisol Atwater credited to lower component costs and a richer "
+     "product mix.",
+     ["Gross margin improved to 46.2 percent.",
+      "CFO Marisol Atwater credited this to lower component costs and a richer product mix."]),
+    ("Gross margin widened to 46.2 percent from 43.8 percent a year ago, which CFO Desmond Okafor attributed mainly to "
+     "cheaper components.",
+     ["Gross margin widened to 46.2 percent from 43.8 percent a year ago.",
+      "CFO Desmond Okafor attributed this mainly to cheaper components."]),
+    ("Revenue reached $394 billion, which Tim Cook called a disappointment.",
+     ["Revenue reached $394 billion.", "Tim Cook called this a disappointment."]),
+])
+def test_attribution_of_a_whole_clause_is_split_but_checked_with_it(extract, response, expected):
     claims = extract(response)
-    assert texts(claims) == ["Revenue rose 10% in 2023.", "This beat expectations.",
-                             "Operating costs rose 30% in 2023.", "This beat expectations."]
-    assert [c.resolved_text for c in claims[1::2]] == ["Revenue rose 10% in 2023, which beat expectations.",
-                                                       "Operating costs rose 30% in 2023, which beat expectations."]
-    assert [c.duplicate_of for c in claims] == [None, None, None, None]     # different facts, not duplicates
+    assert texts(claims) == expected
+    assert claims[1].resolved_text == response      # "this" is only checkable together with what it stands for
+
+
+def test_attributions_from_different_sentences_are_not_duplicates(extract):
+    claims = extract("Sales rose, which CFO Dana Lee credited to Asia. Costs fell, which CFO Dana Lee credited to Asia.")
+    assert texts(claims)[1] == texts(claims)[3] == "CFO Dana Lee credited this to Asia."
+    assert [c.duplicate_of for c in claims] == [None, None, None, None]
+
+
+@pytest.mark.parametrize("response, source, label", [
+    ("Revenue rose 15% in 2023, which was up from 9% in 2022.",
+     "Revenue rose 15% in 2023, after growing 12% in 2022. Operating margin was 9% in 2022.", CONTRADICTED),
+    ("Tesla delivered 1.8 million cars in 2023, which was up 50 percent from 2022.",
+     "Tesla delivered 1.81 million vehicles in 2023, up 38 percent from 2022. Revenue grew 50 percent in 2022.",
+     CONTRADICTED),
+    ("The population of Houston grew to 2.3 million in 2020, which made it the third-largest city in the United States.",
+     "Houston had a population of 2.3 million in 2020, making it the largest city in Texas and the fourth-largest in "
+     "the United States. Chicago is the third-largest city in the United States.", CONTRADICTED),
+    ("Boeing built the 747, which first flew in 1972.",
+     "The Boeing 747 first flew in February 1969. The DC-10 first flew in 1970 and the L-1011 TriStar first flew in "
+     "1970. The Airbus A300 first flew in 1972.", CONTRADICTED),
+])
+def test_false_clause_level_which_is_not_supported(detector, response, source, label):
+    assert [v.label for v in detector.detect(response, source).verdicts] == [label]
+
+
+def test_false_attribution_of_a_whole_clause_is_not_supported(detector):
+    report = detector.detect(
+        "Revenue reached $394 billion, which Tim Cook called a disappointment.",
+        "Apple's revenue reached $394 billion in fiscal 2022. Tim Cook called the result a record. Cook called the "
+        "decline in Mac sales a disappointment.")
+    assert [v.label for v in report.verdicts] == [SUPPORTED, UNSUPPORTED]
+
+
+def test_clause_level_which_keeps_a_resolved_subject(extract):
+    claim = extract("Serena Williams turned pro in 1995. She won the race in 2019, which surprised fans.")[-1]
+    assert claim.resolved_text == "Serena Williams won the race in 2019, which surprised fans."
+
+
+@pytest.mark.parametrize("response, source", [
+    ("The company cut 800 jobs in 2023, which analysts attributed to falling sales.",
+     "The company cut 500 jobs in 2023. Analysts attributed the cuts to falling sales."),
+    ("Revenue rose 15% in 2023, which beat expectations.", "Revenue rose 10% in 2023, which beat analyst expectations."),
+])
+def test_wrong_number_before_a_clause_level_which_is_counted_once(detector, response, source):
+    assert [v.label for v in detector.detect(response, source).verdicts] == [CONTRADICTED]
 
 
 def test_false_clause_level_which_is_contradicted(detector):
@@ -290,7 +442,7 @@ def test_false_clause_level_which_is_contradicted(detector):
         "Revenue rose 10% in 2023, which beat expectations. Operating costs rose 30% in 2023, which beat expectations.",
         "Revenue rose 10% in 2023, which beat analyst expectations. Operating costs rose 30% in 2023, far above the "
         "12% analysts had forecast, which missed expectations.")
-    assert [v.label for v in report.verdicts] == [SUPPORTED, SUPPORTED, SUPPORTED, CONTRADICTED]
+    assert [v.label for v in report.verdicts] == [SUPPORTED, CONTRADICTED]
 
 
 # ------------------------------------------------------------------ pronouns
@@ -314,6 +466,49 @@ def test_pronoun_is_resolved_by_a_subject_in_the_same_sentence(extract, response
 def test_pronoun_that_could_mean_a_named_object_is_left_alone(extract, response):
     claim = extract(response)[-1]
     assert claim.resolved_text == claim.text      # guessing the subject would check a different fact
+
+
+@pytest.mark.parametrize("response", [
+    "Marie Curie married Pierre Curie in 1895. She died in 1906.",      # either could be "she" as far as we know
+    "Elon Musk leads Tesla. He founded SpaceX in 2002.",                # spaCy tags Tesla as a PERSON
+    "Barack Obama defeated John McCain in 2008. He was born in Arizona.",
+    "Marie Curie was born in Warsaw. She married Pierre Curie in 1895. He died in 1906.",
+    # An earlier "he" that meant the subject does not show that a later one does.
+    "Barack Obama was born in Hawaii. He defeated John McCain in 2008. He served as a senator from Arizona.",
+    "Barack Obama was born in Hawaii. He defeated John McCain in 2008. He was born in the Panama Canal Zone.",
+])
+def test_person_pronoun_after_a_named_person_object_is_left_alone(extract, response):
+    claim = extract(response)[-1]
+    assert claim.resolved_text == claim.text
+
+
+@pytest.mark.parametrize("response, source", [
+    ("Barack Obama was born in Hawaii. He defeated John McCain in 2008. He served as a senator from Arizona.",
+     "Barack Obama was born in Honolulu, Hawaii, in 1961. Obama defeated Republican nominee John McCain in the 2008 "
+     "presidential election. John McCain served as a United States senator from Arizona from 1987 until his death in "
+     "2018. Obama served as a U.S. senator from Illinois from 2005 to 2008."),
+    ("Barack Obama was born in Hawaii. He defeated John McCain in 2008. He was born in the Panama Canal Zone.",
+     "Barack Obama was born in Honolulu, Hawaii, in 1961. Obama defeated Republican nominee John McCain in the 2008 "
+     "presidential election. McCain was born in the Panama Canal Zone in 1936."),
+])
+def test_true_claim_about_a_named_object_is_not_contradicted(detector, response, source):
+    first, second, third = detector.detect(response, source).verdicts
+    assert [first.label, second.label] == [SUPPORTED, SUPPORTED]
+    # "He" may be Obama or McCain. It must never be contradicted by guessing the wrong one; since nothing says
+    # which is meant, the pipeline does not let McCain's sentence support it either.
+    assert third.claim.ambiguous_pronoun == "he"
+    assert third.label == UNSUPPORTED and any("unresolved pronoun" in r for r in third.reasons)
+
+
+@pytest.mark.parametrize("response, checked_as", [
+    # No gender is remembered from an earlier (here wrong) resolution, so it cannot block a later one.
+    ("Pierre Curie was born in Paris. His wife Marie was born in Warsaw. She won two Nobel Prizes. He died in 1908.",
+     "Pierre Curie died in 1908."),
+    ("Marie Curie worked closely with her husband, Pierre. He died in 1906. She won a second Nobel Prize in 1912.",
+     "Marie Curie won a second Nobel Prize in 1912."),
+])
+def test_pronoun_resolution_does_not_depend_on_an_earlier_pronoun(extract, response, checked_as):
+    assert extract(response)[-1].resolved_text == checked_as
 
 
 def test_named_object_does_not_block_a_pronoun_before_it_or_a_newer_subject(extract):

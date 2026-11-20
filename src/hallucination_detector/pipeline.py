@@ -18,7 +18,7 @@ from . import facts, scoring
 from .claims import ClaimExtractor, load_nlp
 from .config import Config
 from .retrieval import Retriever, SourceIndex, get_embedder
-from .schemas import Citation, Claim, ClaimVerdict, Report, SourceDocument, UNSUPPORTED
+from .schemas import SUPPORTED, UNSUPPORTED, Citation, Claim, ClaimVerdict, Report, SourceDocument
 from .sources import as_documents, split_sentences
 
 # Latin-script languages most often mistaken for English. spaCy ships their stop lists, so the
@@ -138,14 +138,17 @@ class HallucinationDetector:
                      if best_sim >= cfg.contradiction_threshold else [])
         novel = facts.novel(claim_facts, index.text)    # cased: a K/M/B suffix is only read as a scale in capitals
 
+        # the NLI premise of each scored citation (None where NLI did not read it), kept for the re-score below
+        premises: list[str | None] = [None] * len(citations)
         if self.nli is not None:
             # v1 read only the best sentence; v2 also reads the other related ones
-            to_score = [(pos, c) for (pos, _), c in zip(hits, citations)
-                        if c is citations[0] or c.similarity >= cfg.related_threshold][: cfg.nli_top_k]
-            premises = [" ".join(s.text for s in index.neighbors(pos, cfg.nli_context_sentences))
-                        for pos, _ in to_score]
-            for (_, citation), probs in zip(to_score, self.nli.score([(p, text) for p in premises])):
-                citation.nli = probs
+            to_score = [(i, pos) for i, ((pos, _), c) in enumerate(zip(hits, citations))
+                        if i == 0 or c.similarity >= cfg.related_threshold][: cfg.nli_top_k]
+            for i, pos in to_score:
+                premises[i] = " ".join(s.text for s in index.neighbors(pos, cfg.nli_context_sentences))
+            scored = [i for i, _ in to_score]
+            for i, probs in zip(scored, self.nli.score([(premises[i], text) for i in scored])):
+                citations[i].nli = probs
         nli = scoring.decisive_nli(citations, cfg)
 
         notation_note = None
@@ -154,8 +157,7 @@ class HallucinationDetector:
             # NLI reads '$2.1 billion' vs '$2,100 million' as a contradiction. Score the same pair again with
             # both texts in one notation: only a contradiction that then disappears was about the notation;
             # one about a name or a reversed meaning ('cut' vs 'added') stays.
-            premise = " ".join(s.text for s in index.neighbors(hits[0][0], cfg.nli_context_sentences))
-            rescored = self.nli.score([(facts.canonical_numbers(premise), facts.canonical_numbers(text))])[0]
+            rescored = self._nli_in_one_notation(premises[0], text)
             citations[0].nli = rescored
             nli = scoring.decisive_nli(citations, cfg)
             if rescored["contradiction"] < cfg.nli_threshold:
@@ -164,26 +166,47 @@ class HallucinationDetector:
         label, confidence, reasons = scoring.decide(best_sim, conflicts, novel, nli, cfg)
         if notation_note:
             reasons.append(notation_note)
-        self._warn_if_sources_conflict(claim, citations, warnings)
+        pronoun = claim.ambiguous_pronoun
+        if label == SUPPORTED and pronoun:
+            # claims.py leaves a pronoun unresolved when two people could be meant. Then the evidence may be
+            # about the other person ("She died in 1906" matched to Pierre Curie's death), so it cannot support.
+            label, confidence = UNSUPPORTED, 0.5
+            reasons.append(f"unresolved pronoun: cannot tell who '{pronoun}' refers to, so the evidence cannot support it")
+        self._warn_if_sources_conflict(claim, citations, premises, warnings)
         # PLAN section 3: cite only sentences that are actually evidence. With none, the list is empty
         # and the best similarity is still given in the reasons.
         return ClaimVerdict(claim, label, round(confidence, 3), reasons, related, best_sim)
 
-    def _warn_if_sources_conflict(self, claim: Claim, citations: list[Citation], warnings: list[str]) -> None:
-        """Two close sentences from different documents that disagree about the claim's numbers or its truth."""
-        cfg = self.config
-        close = [c for c in citations if c.similarity >= cfg.contradiction_threshold]
-        if len({c.source_id for c in close}) < 2:
-            return
-        claim_nums = _digit_numbers(claim.resolved_text)
+    def _nli_in_one_notation(self, premise: str, hypothesis: str) -> dict[str, float]:
+        """NLI on the pair with every number written the same way ('$2,100 million' -> '$2.1 billion')."""
+        return self.nli.score([(facts.canonical_numbers(premise), facts.canonical_numbers(hypothesis))])[0]
 
-        def stance(c: Citation) -> str | None:
+    def _warn_if_sources_conflict(self, claim: Claim, citations: list[Citation], premises: list[str | None],
+                                  warnings: list[str]) -> None:
+        """Two close sentences from different documents that disagree about the claim's numbers or its truth.
+
+        `premises[i]` is the text NLI read for citations[i] (None where NLI did not read it)."""
+        cfg, text = self.config, claim.resolved_text
+        close = [i for i, c in enumerate(citations) if c.similarity >= cfg.contradiction_threshold]
+        if len({citations[i].source_id for i in close}) < 2:
+            return
+        claim_nums = _digit_numbers(text)
+
+        def stance(i: int) -> str | None:
+            c = citations[i]
             if c.nli and c.nli["entailment"] >= cfg.nli_threshold:
                 return "supports"
-            # as in _check, NLI reads '1,200,000' against '1.2 million' as a contradiction; the numbers decide that
-            if (c.nli and c.nli["contradiction"] >= cfg.nli_threshold
-                    and not facts.same_values_other_notation(claim.resolved_text, c.quote)):
-                return "contradicts"
+            if c.nli and c.nli["contradiction"] >= cfg.nli_threshold:
+                if not facts.same_values_other_notation(text, c.quote):
+                    return "contradicts"
+                # As in _check: NLI reads '1,200,000' against '1.2 million' as a contradiction, so score the
+                # pair again in one notation. A contradiction that stays ('rose' vs 'fell') is real; a source
+                # NLI contradicts never falls through to the number check below and counts as a supporter.
+                probs = self._nli_in_one_notation(premises[i] or c.quote, text)
+                if probs["contradiction"] >= cfg.nli_threshold:
+                    return "contradicts"
+                if probs["entailment"] >= cfg.nli_threshold:
+                    return "supports"
             # NLI neutral or off: fall back to the claim's numbers, kept even when NLI is neutral
             # because the NLI model misses some number conflicts
             if _rival_numbers(claim_nums, c.quote):
@@ -193,10 +216,10 @@ class HallucinationDetector:
                 return "supports"
             return None
 
-        best: dict[str, Citation] = {}
-        for c in close:                                                 # best citation per source wins
-            best.setdefault(c.source_id, c)
-        stances = {s: stance(c) for s, c in best.items()}
+        best: dict[str, int] = {}
+        for i in close:                                                 # best citation per source wins
+            best.setdefault(citations[i].source_id, i)
+        stances = {s: stance(i) for s, i in best.items()}
         supporters = [s for s, v in stances.items() if v == "supports"]
         opposers = [s for s, v in stances.items() if v == "contradicts"]
         if supporters and opposers:
@@ -204,7 +227,7 @@ class HallucinationDetector:
                             f"'{opposers[0]}' contradicts it")
             return
         # every close source contradicts the claim, but they also give different values from each other
-        rivals = {s: _rival_numbers(claim_nums, best[s].quote) for s in opposers}
+        rivals = {s: _rival_numbers(claim_nums, citations[best[s]].quote) for s in opposers}
         for i, a in enumerate(opposers):
             for b in opposers[i + 1:]:
                 if rivals[a] and rivals[b] and rivals[a].isdisjoint(rivals[b]):
@@ -212,17 +235,21 @@ class HallucinationDetector:
                     return
 
 
-# A scale word right after a numeral ('1.2 million'), which belongs to the number, or any other word.
-_SCALED_DIGIT_OR_WORD_RE = re.compile(r"\d\s?(?:thousand|million|billion|trillion)\b|[A-Za-z]+", re.IGNORECASE)
+# A scale word right after a numeral ('1.2 million', '$5-million'), which belongs to the number, or any other word.
+# Only a hyphen joins them, not a dash: in 'raised $2 billion in 2021—billion-dollar rounds' the dash
+# separates the year from the next phrase.
+_SCALED_DIGIT_OR_WORD_RE = re.compile(r"\d[\s-]?(?:thousand|million|billion|trillion)\b|[A-Za-z]+", re.IGNORECASE)
 
 
 def _digit_numbers(text: str) -> set[float]:
-    """Numbers written with digits, with their scale ('$4.5 billion' is 4.5e9). Number words on their own
-    ('two Canadian researchers', 'two thousand') are too often incidental to stand in for a claimed value,
-    so they are left out."""
+    """Numbers written with digits, with their scale ('$4.5 billion' and '$4.5-billion' are 4.5e9). Number
+    words on their own ('two Canadian researchers', 'two thousand') are too often incidental to stand in for
+    a claimed value, so they are left out."""
     def mask(m: re.Match) -> str:
         word = m.group()
-        return " " if not word[0].isdigit() and word.lower() in facts.WORD_NUMBERS else word
+        if word[0].isdigit():               # '5-million' -> '5 million', the spelling facts.numbers scales
+            return word.replace("-", " ")
+        return " " if word.lower() in facts.WORD_NUMBERS else word
 
     return facts.numbers(_SCALED_DIGIT_OR_WORD_RE.sub(mask, text))
 
@@ -299,18 +326,26 @@ def _words(text: str) -> list[_Word]:
 
 
 def _in_names(words: list[_Word], other: frozenset[str], english: frozenset[str]) -> list[bool]:
-    """Which words belong to a title ('wrote Le Petit Prince') or a name ('Pedro de la Rosa')."""
+    """Which words belong to a title ('wrote Le Petit Prince') or a name ('Pedro de la Rosa').
+
+    A title ends with its sentence or line, so in a list of German or Dutch lines a capitalized word in the
+    first line does not set the following lines aside. Known limit: inside one sentence a capitalized foreign
+    word still starts a title that runs to the end, so 'El Real Madrid ganó La Liga tras una temporada muy
+    complicada.' and 'Zur Zeit arbeiten dort etwa 300 Menschen.' (German capitalizes nouns such as 'Zeit')
+    pass as English and are scored. That is preferred to leaving short English answers that name a foreign
+    title ('Umberto Eco wrote Il nome della rosa.') unscored.
+    """
     named = [False] * len(words)
     english_only = [w.lower in english and w.lower not in other for w in words]
     i = 0
     while i < len(words):
         w = words[i]
-        # A foreign article capitalized inside a sentence starts a title. German capitalizes nouns but
+        # A foreign function word capitalized inside a sentence starts a title. German capitalizes nouns but
         # not articles, so 'Die Astronauten sammelten etwa ...' still counts. The title runs to the next
-        # punctuation, number or English function word: 'wrote El amor en los tiempos del cólera.'
+        # punctuation, number, English function word or new sentence: 'wrote El amor en los tiempos del cólera.'
         if w.capitalized and not w.initial and w.lower in other and w.lower not in english:
             j = i + 1
-            while j < len(words) and words[j].joined and not english_only[j]:
+            while j < len(words) and words[j].joined and not words[j].initial and not english_only[j]:
                 j += 1
             named[i:j] = [True] * (j - i)
             i = j
@@ -325,3 +360,4 @@ def _in_names(words: list[_Word], other: frozenset[str], english: frozenset[str]
             named[i:j] = [True] * (j - i)
         i = max(j, i + 1)
     return named
+

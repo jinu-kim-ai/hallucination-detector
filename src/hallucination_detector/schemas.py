@@ -34,6 +34,9 @@ class Claim:
     end: int
     resolved_text: str = ""      # text used for checking (leading pronoun replaced by its referent)
     duplicate_of: int | None = None
+    ambiguous_pronoun: str | None = None   # "she" when two people could be meant, so it was left unresolved
+    pronoun_referent: str | None = None    # with ambiguous_pronoun: the remembered subject ("Marie Curie")
+    pronoun_rival: str | None = None       # with ambiguous_pronoun: the other candidate, as a full name ("Pierre Curie")
 
     def __post_init__(self):
         self.resolved_text = self.resolved_text or self.text

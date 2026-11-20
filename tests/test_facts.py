@@ -52,6 +52,15 @@ from hallucination_detector.schemas import CONTRADICTED, FABRICATED, SUPPORTED
     ("two million three hundred thousand", {2.3e6}),
     ("between one hundred and two hundred", {100.0, 200.0}),
     ("twenty one hundred", {2100.0}),
+    # 'hundred and fifty thousand': the thousand scales the whole group, British style
+    ("Two hundred and fifty thousand people attended.", {250000.0}),
+    ("two hundred and fifty thousand", {250000.0}),
+    ("one hundred and ten thousand", {110000.0}),
+    ("one hundred and twenty-five thousand", {125000.0}),
+    ("one million two hundred and fifty thousand", {1250000.0}),
+    ("one thousand and fifty", {1050.0}),
+    # pinned reading of an ambiguous phrase: one number, not the range 100 to 50,000
+    ("between one hundred and fifty thousand", {150000.0}),
 ])
 def test_number_formats(text, expected):
     assert facts.numbers(text) == expected
@@ -158,6 +167,112 @@ def test_number_mismatch_compares_numbers_of_the_same_kind(claim, evidence, expe
 ])
 def test_number_of_another_kind_is_not_a_mismatch(claim, evidence):
     assert facts.number_mismatch(claim, evidence) is None
+
+
+@pytest.mark.parametrize("claim, evidence", [
+    # 'member' counts members, not the people who founded the club or the states of a union
+    ("The Riverside Rowing Club has 5,000 members.", "The Riverside Rowing Club was founded by 12 people in 1898."),
+    ("The European Union has 450 million people.", "The European Union has 27 member states."),
+    # a year after a month name is a date even when a noun follows
+    ("In March 2020 workers at the Detroit plant went on strike.",
+     "About 1,500 workers at the Detroit plant went on strike."),
+    ("On 4 March 2020 staff walked out of the Leeds office.", "About 900 staff walked out of the Leeds office."),
+    # the same amount in British wording
+    ("Two hundred and fifty thousand people attended the rally.", "250,000 people attended the rally."),
+])
+def test_number_of_other_people_or_a_date_is_not_a_mismatch(claim, evidence):
+    assert facts.number_mismatch(claim, evidence) is None
+
+
+def test_year_after_a_month_name_still_compares_with_years():
+    assert facts.number_mismatch("In March 2020 workers at the Detroit plant went on strike.",
+                                 "In March 2021 workers at the Detroit plant went on strike.") == \
+        "number mismatch: claim says 2020, evidence says 2021"
+
+
+# An article does not make a 4-digit number a year: 'The 1500 employees' is a head count.
+ARTICLE_COUNTS = [
+    ("The 1500 employees at the Ohio plant build engines.",
+     "The company has 1,500 employees in total. The Ohio plant employs 900 employees who build engines.",
+     "number mismatch: claim says 1500, evidence says 900"),
+    ("The team plays in a 1200-seat arena downtown.",
+     "The club sold 1,200 season tickets. The team plays in a 4,000-seat arena downtown.",
+     "number mismatch: claim says 1200, evidence says 4000"),
+    ("The 1800 students at the school wear uniforms.",
+     "The district enrolls 1,800 students. The school has 650 students, all of whom wear uniforms.",
+     "number mismatch: claim says 1800, evidence says 650"),
+    ("The 1800 residents of the village were evacuated.",
+     "All 1,200 residents of the village were evacuated after the flood.",
+     "number mismatch: claim says 1800, evidence says 1200"),
+]
+
+
+def test_four_digit_count_after_an_article_keeps_its_noun():
+    (q,) = facts.quantities("The 1500 employees at the Ohio plant build engines.")
+    assert q.kinds == frozenset({"calendar year", "person"})     # employees count people
+    (q,) = facts.quantities("The team plays in a 1200-seat arena downtown.")
+    assert "seat" in q.kinds
+
+
+@pytest.mark.parametrize("claim, source, reason", ARTICLE_COUNTS)
+def test_wrong_count_after_an_article_is_contradicted(detector_no_nli, claim, source, reason):
+    verdict = detector_no_nli.check_claim(claim, source)
+    assert verdict.label == CONTRADICTED
+    assert reason in verdict.reasons
+
+
+def test_count_after_an_article_is_compared_with_the_count_not_only_the_year(detector_no_nli):
+    verdict = detector_no_nli.check_claim("The 1800 employees received a bonus in 2021.",
+                                          "In 2021, the 1,200 employees received a bonus.")
+    assert verdict.label == CONTRADICTED
+    assert "number mismatch: claim says 1800, evidence says 1200, 2021" in verdict.reasons
+
+
+SMITH = ("The Smith Tower, designed by John Smith, has 30 floors.",
+         "The Smith Tower was designed by architect John Smith when he was 45. The building has 30 floors.")
+BRIGHTMART = ("Brightmart, ranked 15 on the Fortune list, opened 12 new stores in Ohio.",
+              "Brightmart, ranked 15 on the Fortune list, opened new stores in Ohio. "
+              "In total it opened 12 stores that year.")
+
+
+def test_lone_partner_is_dropped_when_the_related_evidence_states_the_claim_number_with_its_unit(nlp):
+    claim, source = SMITH
+    best = "The Smith Tower was designed by architect John Smith when he was 45."
+    # an age is the only bare number in the best sentence; the 30 floors are in the next one
+    assert facts.number_mismatch(claim, best, source) is None
+    out = facts.conflicts(nlp, claim, facts.extract(nlp, claim), [best, "The building has 30 floors."], source.lower())
+    assert out == []
+    # with nothing else stated, an unlabelled same-sized number is still the one the claim must mean
+    assert facts.number_mismatch("Sales reached 3.2 million units.", "Sales reached 2.9 million.",
+                                 "Sales reached 2.9 million.") == \
+        "number mismatch: claim says 3.2 million, evidence says 2.9 million"
+
+
+MUSEUM = ("The museum welcomed 1.4 million visitors in 2019.",
+          "Attendance at the museum hit 1.1 million in 2019. In 2018 attendance was 1.4 million, a record.")
+
+
+def test_lone_partner_stays_when_the_claim_number_is_elsewhere_without_its_unit(detector_no_nli):
+    claim, source = MUSEUM
+    best = "Attendance at the museum hit 1.1 million in 2019."
+    # the 1.4 million of 2018 has no 'visitors' after it, so it does not show where the claim's figure came from
+    assert facts.number_mismatch(claim, best, source) == \
+        "number mismatch: claim says 1.4 million, evidence says 1.1 million"
+    verdict = detector_no_nli.check_claim(claim, source)
+    assert verdict.label == CONTRADICTED
+    assert "number mismatch: claim says 1.4 million, evidence says 1.1 million" in verdict.reasons
+
+
+def test_lone_partner_is_never_a_number_the_claim_states_itself():
+    claim, _ = BRIGHTMART
+    # the 15 is the claim's own rank, so it cannot also be the partner of the 12 stores
+    assert facts.number_mismatch(claim, "Brightmart, ranked 15 on the Fortune list, opened new stores in Ohio.") is None
+
+
+@pytest.mark.parametrize("claim, source", [SMITH, BRIGHTMART])
+def test_age_or_rank_beside_a_count_is_no_contradiction(detector, detector_no_nli, claim, source):
+    assert detector.check_claim(claim, source).label == SUPPORTED
+    assert detector_no_nli.check_claim(claim, source).label == SUPPORTED
 
 
 @pytest.mark.parametrize("claim, evidence", [
@@ -371,9 +486,96 @@ def test_numeric_date_is_no_date_mismatch(nlp):
     ("May 2019", "on 5 may 2019 the agency approved the drug.", True),
     ("May 2019", "in may, the agency approved the 2019 plan.", True),
     ("March 2019", "the agency approved it on march 3, 2019.", True),
+    # the start of a range that 'from' / 'between' opens and a second month name closes
+    ("March 2019", "production ran from march to june 2019 at the ohio plant.", True),
+    ("March 2019", "production ran between march and june 2019 at the ohio plant.", True),
+    ("March 2019", "production ran from march through june 2019.", True),
+    ("May 2019", "production ran from june to may 2019.", True),
+    # without both, 'march through june' could be the verb ('plan to march through june'): left ungrounded
+    ("March 2019", "production ran march through june 2019.", False),
+    ("May 2019", "costs from may exceed estimates in 2019.", False),
+    # the modal and the verb stay ordinary words next to 'to', 'and', 'this', 'each' and 'every'
+    ("May 2019", "in 2019 the agency said this may cause delays.", False),
+    ("May 2019", "prices rose in 2019 and may fall.", False),
+    ("March 2019", "in 2019 protesters plan to march on the capital.", False),
+    ("May 2019", "in 2019 each may apply for a grant.", False),
+    ("March 2019", "in 2019 every march drew crowds.", False),
 ])
 def test_ambiguous_month_words_count_only_as_dates(ent, source, expected):
     assert facts.grounded(ent, "DATE", source, facts.numbers(source)) is expected
+
+
+@pytest.mark.parametrize("claim, source", [
+    ("Production began in March 2019.", "Production ran from March to June 2019 at the Ohio plant."),
+    ("Production began in March 2019.", "Production ran between March and June 2019 at the Ohio plant."),
+    ("Production began in May 2019.", "Production ran from May to June 2019 at the Ohio plant."),
+])
+def test_month_in_a_source_range_is_not_fabricated(detector, claim, source):
+    assert detector.check_claim(claim, source).label != FABRICATED
+
+
+@pytest.mark.parametrize("claim, source, ent", [
+    ("The new terminal opened in May 2023.",
+     "Passenger numbers dipped in April and may recover by the summer. The new terminal opened in 2023.",
+     "May 2023"),
+    ("The company will report earnings in May 2025.",
+     "Shares fell sharply in February and may fall further, analysts said. The company will report earnings in 2025.",
+     "May 2025"),
+    ("The rally took place in March 2019.",
+     "Protesters plan to march through June, organisers said. The rally took place in 2019.", "March 2019"),
+    ("The exhibit opens in May 2024.",
+     "Prices rose in June and may continue to rise in 2024. The exhibit opens in 2024.", "May 2024"),
+    ("The vaccine was approved in May 2021.",
+     "The choice between may and must matters in law. The vaccine was approved in 2021.", "May 2021"),
+    ("Construction began in May 2015.",
+     "Construction began in 2015. Officials said costs from may exceed estimates.", "May 2015"),
+])
+def test_modal_or_verb_beside_a_month_name_grounds_no_month(detector, detector_no_nli, claim, source, ent):
+    assert facts.grounded(ent, "DATE", source.lower(), facts.numbers(source.lower())) is False
+    for det in (detector, detector_no_nli):
+        verdict = det.check_claim(claim, source)
+        assert verdict.label == FABRICATED
+        assert f"not found in source: '{ent}'" in verdict.reasons
+
+
+@pytest.mark.parametrize("ent, source, expected", [
+    # an ordinal written as a word on one side and in digits on the other
+    ("The Nineteenth Amendment", "the 19th amendment to the u.s. constitution, ratified in 1920.", True),
+    ("5th Avenue", "the flagship store is located on fifth avenue in new york.", True),
+    ("The 3rd Infantry Division", "the third infantry division entered baghdad in april 2003.", True),
+    # a different ordinal, or the same number in other words, does not ground the name
+    ("The Eighteenth Amendment", "the 19th amendment to the u.s. constitution, ratified in 1920.", False),
+    ("6th Avenue", "the flagship store is located on fifth avenue in new york.", False),
+    ("The 4th Infantry Division", "the third infantry division entered baghdad in april 2003.", False),
+    ("The Nineteenth Amendment", "19 people voted for the amendment.", False),
+    ("The Nineteenth Amendment", "the 19th century amendment was popular.", False),
+])
+def test_ordinal_in_other_notation_grounds_a_name(ent, source, expected):
+    assert facts.grounded(ent, "LAW", source, facts.numbers(source)) is expected
+
+
+ORDINAL_PAIRS = [
+    ("The Nineteenth Amendment granted women the right to vote in 1920.",
+     "The 19th Amendment to the U.S. Constitution, ratified in 1920, granted women the right to vote."),
+    ("The store is located on 5th Avenue in New York.", "The flagship store is located on Fifth Avenue in New York."),
+    ("The 3rd Infantry Division entered Baghdad in April 2003.",
+     "The Third Infantry Division entered Baghdad in April 2003."),
+]
+
+
+@pytest.mark.parametrize("claim, source", ORDINAL_PAIRS)
+def test_ordinal_name_in_other_notation_is_supported(nlp, detector, claim, source):
+    assert facts.novel(facts.extract(nlp, claim), source) == []
+    assert detector.check_claim(claim, source).label == SUPPORTED
+
+
+@pytest.mark.parametrize("claim, source", [
+    ("The Eighteenth Amendment granted women the right to vote in 1920.", ORDINAL_PAIRS[0][1]),
+    ("The store is located on 6th Avenue in New York.", ORDINAL_PAIRS[1][1]),
+    ("The 4th Infantry Division entered Baghdad in April 2003.", ORDINAL_PAIRS[2][1]),
+])
+def test_wrong_ordinal_in_a_name_is_contradicted(detector_no_nli, claim, source):
+    assert detector_no_nli.check_claim(claim, source).label == CONTRADICTED
 
 
 @pytest.mark.parametrize("text", ["The app has 5M users.", "The model has 3B parameters.", "Northwind employs 1.2K people."])
@@ -461,6 +663,18 @@ def test_relative_dates_are_not_checkable_facts(nlp):
     # compound number words
     ("The ship carried one hundred twenty passengers.", "The ship carried 120 passengers."),
     ("The ship carried one hundred and twenty passengers.", "The ship carried 120 passengers."),
+    ("Two hundred and fifty thousand people attended the rally.", "250,000 people attended the rally."),
+    # ordinals written differently in a name
+    *ORDINAL_PAIRS,
+    # club members are not the founders; a year after a month name is no head count
+    ("The Riverside Rowing Club has 5,000 members.",
+     "The Riverside Rowing Club was founded by 12 people in 1898. Today the club has 5,000 members."),
+    ("In March 2020 workers at the Detroit plant went on strike.",
+     "The strike began in March 2020. About 1,500 workers at the Detroit plant went on strike."),
+    ("On 4 March 2020 staff walked out of the Leeds office.",
+     "The walkout began on 4 March 2020. About 900 staff walked out of the Leeds office."),
+    # a month at one end of a source range
+    ("Production began in March 2019.", "Production ran from March to June 2019 at the Ohio plant."),
 ])
 def test_true_claims_are_supported(detector_no_nli, claim, source):
     assert detector_no_nli.check_claim(claim, source).label == SUPPORTED
@@ -523,3 +737,42 @@ def test_same_values_other_notation(claim, evidence, expected):
 ])
 def test_negation_shared_through_or_covers_every_verb(nlp, claim, evidence, flipped):
     assert facts.polarity_flip(nlp, claim, evidence) is flipped
+
+
+# ---------------------------------------------------------------- long sources
+def test_long_source_is_checked_in_linear_time(nlp):
+    # Reading every number's kind from the whole text before it, once per claim, took 13-16 s per claim
+    # on a source this size. The source's numbers are now read once, each from a short window.
+    import time
+
+    from hallucination_detector import HallucinationDetector
+
+    detector = HallucinationDetector(nlp=nlp, use_nli=False, embedder="hashing")
+    source = " ".join(f"In {1900 + i % 120} the plant in district {i} employed {100 + i} workers and "
+                      f"earned ${i}.5 million." for i in range(2000))
+    response = ("The plant in district 7 employed 107 workers in 1907. "
+                "The plant in district 9 earned $9.5 million. The plant in district 11 employed 5,000 workers.")
+    start = time.perf_counter()
+    report = detector.detect(response, source)
+    elapsed = time.perf_counter() - start
+    assert len(report.verdicts) == 3
+    assert elapsed < 20, f"detect() took {elapsed:.1f} s on a 2,000-sentence source"
+
+
+def test_number_kinds_do_not_depend_on_distant_text():
+    near = facts.quantities("In March 2020 workers at the plant went on strike. The factory has 1800 workers.")
+    far = facts.quantities("Filler text without digits. " * 5000
+                           + "In March 2020 workers at the plant went on strike. The factory has 1800 workers.")
+    assert near == far
+
+
+@pytest.mark.parametrize("text, expected", [
+    ("a $5-million grant", {5e6}),
+    ("a $5 million grant", {5e6}),
+    ("from 1990-1995", {1990.0, 1995.0}),              # a range, not a scale
+    ("COVID-19 cases", {19.0}),
+    ("the 2021 billion-dollar deal", {2021.0, 1e9}),   # the year is not multiplied by the compound's scale
+    ("a 12-year-old boy", {12.0}),
+])
+def test_hyphenated_scale_word(text, expected):
+    assert facts.numbers(text) == expected
